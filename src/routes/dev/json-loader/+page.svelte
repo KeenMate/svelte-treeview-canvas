@@ -1986,7 +1986,7 @@
 							bind:selectedNode
 							bind:insertResult
 						>
-							{#snippet nodeTemplate(node)}
+							{#snippet nodeTemplate(node: any)}
 								<span>
 									{#if displayMember && node.data?.[displayMember]}
 										{node.data[displayMember]}

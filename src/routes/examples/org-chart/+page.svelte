@@ -237,7 +237,7 @@
 
 	// Theme
 	type ThemeName = 'default' | 'futuristic';
-	let activeTheme: ThemeName = $state('default');
+	let activeTheme = $state<ThemeName>('default');
 
 	const futuristicTheme: Partial<CanvasTheme> = {
 		bg: '#080c14',
@@ -740,9 +740,9 @@
 			</span>
 
 			<span class="orientation-toggle">
-				{#each /** @type {LayoutMode[]} */ (['tree', 'balanced', 'fishbone', 'sunburst', 'box']) as mode}
+				{#each ['tree', 'balanced', 'fishbone', 'sunburst', 'box'] as mode}
 					<button class="btn orient-btn" class:orient-active={layoutMode === mode}
-						onclick={() => layoutMode = mode}>{mode[0].toUpperCase() + mode.slice(1)}</button>
+						onclick={() => layoutMode = mode as LayoutMode}>{mode[0].toUpperCase() + mode.slice(1)}</button>
 				{/each}
 			</span>
 
