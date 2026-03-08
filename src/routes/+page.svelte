@@ -1,7 +1,7 @@
 <script>
 	import { onMount } from 'svelte';
 
-	const version = 'v5.0.0-rc01';
+	const version = 'v1.0.0-rc01';
 
 	const examples = [
 		{
@@ -21,6 +21,18 @@
 			icon: '🏒',
 			title: 'NHL Playoff Bracket',
 			description: 'Tournament bracket with custom matchup cards showing team names, seeds, and series scores.'
+		},
+		{
+			href: '/examples/context-menu',
+			icon: '📋',
+			title: 'Context Menu',
+			description: 'Right-click menus with icons, shortcuts, submenus, named dividers, disabled/hidden items, and danger actions.'
+		},
+		{
+			href: '/examples/theming',
+			icon: '🎨',
+			title: 'Theming',
+			description: 'Shared --base-* CSS design tokens that flow into the canvas theme. Presets, priority chain, dark mode.'
 		},
 		{
 			href: '/dev/layout-modes',

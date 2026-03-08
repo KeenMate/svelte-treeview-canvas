@@ -1,10 +1,10 @@
 import type { LTreeNode } from '@keenmate/svelte-treeview';
-import type { DropPosition, ContextMenuItem } from '@keenmate/svelte-treeview';
+import type { DropPosition, ContextMenuItem, ContextMenuDivider, ContextMenuEntry } from '@keenmate/svelte-treeview';
 import type { TreeController, TreeControllerProps } from '@keenmate/svelte-treeview';
 import type { CanvasTheme } from './canvas-theme.js';
 
 // Re-export for convenience
-export type { LTreeNode, DropPosition, ContextMenuItem, TreeController, TreeControllerProps };
+export type { LTreeNode, DropPosition, ContextMenuItem, ContextMenuDivider, ContextMenuEntry, TreeController, TreeControllerProps };
 
 // ── LOD ──────────────────────────────────────────────────────────────────
 
@@ -133,6 +133,7 @@ export interface CanvasNodeState {
 export interface CanvasVisualConfig {
 	nodeHeight: number;
 	nodeMinWidth: number;
+	nodeMaxWidth: number;  // 0 = unlimited
 	nodePaddingX: number;
 	colorBarWidth: number;
 	font: string;
@@ -147,6 +148,8 @@ export interface CanvasRenderContext<T> {
 	node: LTreeNode<T>;
 	/** Resolved display label for this node (from getNodeLabel or displayValueMember) */
 	label: string;
+	/** Resolved badge content for this node (null = no badge). Default: child count when collapsed */
+	badgeContent: string | null;
 	bounds: CanvasNodeBounds;
 	state: CanvasNodeState;
 	lod: LodLevel;
@@ -179,14 +182,17 @@ export type MeasureNodeHeightCallback<T> = (
 /** Node display text callback */
 export type GetNodeLabelCallback<T> = (node: LTreeNode<T>) => string;
 
+/** Badge content callback — return string to display, or null to hide badge */
+export type GetBadgeContentCallback<T> = (node: LTreeNode<T>) => string | null;
+
 /** Collection of slot-level render callbacks */
 export interface NodeRenderSlots<T> {
-	renderNode?: RenderNodeCallback<T>;
-	renderBackground?: RenderSlotCallback<T>;
-	renderColorBar?: RenderSlotCallback<T>;
-	renderBody?: RenderSlotCallback<T>;
-	renderChevron?: RenderSlotCallback<T>;
-	renderBadge?: RenderSlotCallback<T>;
+	renderNodeCallback?: RenderNodeCallback<T>;
+	renderBackgroundCallback?: RenderSlotCallback<T>;
+	renderColorBarCallback?: RenderSlotCallback<T>;
+	renderBodyCallback?: RenderSlotCallback<T>;
+	renderChevronCallback?: RenderSlotCallback<T>;
+	renderBadgeCallback?: RenderSlotCallback<T>;
 }
 
 // ── Focus Options ───────────────────────────────────────────────────

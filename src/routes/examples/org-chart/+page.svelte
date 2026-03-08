@@ -2,7 +2,7 @@
 	import { CanvasTree } from '$lib/index.js';
 	import type { TreeController } from '@keenmate/svelte-treeview';
 	import type { LTreeNode } from '@keenmate/svelte-treeview';
-	import type { ContextMenuItem } from '@keenmate/svelte-treeview';
+	import type { ContextMenuEntry } from '@keenmate/svelte-treeview';
 	import type {
 		CanvasRenderContext,
 		MeasureNodeWidthCallback,
@@ -287,11 +287,11 @@
 		return AVATAR_COLORS[Math.abs(hash) % AVATAR_COLORS.length];
 	}
 
-	const measureNodeWidth: MeasureNodeWidthCallback<Person> = (node) => {
+	const measureNodeWidthCallback: MeasureNodeWidthCallback<Person> = (node) => {
 		return CARD_W;
 	};
 
-	function renderNode(rctx: CanvasRenderContext<Person>) {
+	function renderNodeCallback(rctx: CanvasRenderContext<Person>) {
 		const { ctx, node, bounds, state, lod, config, theme } = rctx;
 		const { x, y, w, h } = bounds;
 		const person = node.data;
@@ -627,41 +627,41 @@
 
 	// ── Context Menu ──────────────────────────────────────────────────────
 
-	function getContextMenu(node: LTreeNode<Person>): ContextMenuItem[] {
+	function getContextMenu(node: LTreeNode<Person>): ContextMenuEntry[] {
 		const person = node.data;
 		if (!person) return [];
 
-		const items: ContextMenuItem[] = [];
+		const items: ContextMenuEntry[] = [];
 
 		items.push({
 			icon: '\u{1F3AF}',
-			title: 'Focus on person',
-			callback: () => canvasTreeRef?.focusOnPath(node.path)
+			label: 'Focus on person',
+			onclick: () => canvasTreeRef?.focusOnPath(node.path)
 		});
 
 		items.push({
 			icon: '\u{1F4E7}',
-			title: `Email ${person.name.split(' ')[0]}`,
-			callback: () => {}
+			label: `Email ${person.name.split(' ')[0]}`,
+			onclick: () => {}
 		});
 
 		if (node.hasChildren) {
-			items.push({ isDivider: true, title: '', callback: () => {} });
+			items.push({ divider: true });
 			items.push({
 				icon: node.isExpanded ? '\u{1F4C1}' : '\u{1F4C2}',
-				title: node.isExpanded ? 'Collapse team' : 'Expand team',
-				callback: () => {
+				label: node.isExpanded ? 'Collapse team' : 'Expand team',
+				onclick: () => {
 					if (node.isExpanded) canvasTreeRef?.collapseAll(node.path);
 					else canvasTreeRef?.expandAll(node.path);
 				}
 			});
 		}
 
-		items.push({ isDivider: true, title: '', callback: () => {} });
+		items.push({ divider: true });
 		items.push({
 			icon: '\u{1F4CB}',
-			title: 'Copy email',
-			callback: () => navigator.clipboard.writeText(person.email)
+			label: 'Copy email',
+			onclick: () => navigator.clipboard.writeText(person.email)
 		});
 
 		return items;
@@ -715,7 +715,7 @@
 		<h1>Org Chart</h1>
 		<p class="subtitle">
 			A management org chart rendered with <code>&lt;CanvasTree&gt;</code> using custom
-			<code>renderNode</code> callbacks to draw business-card-style nodes with avatars,
+			<code>renderNodeCallback</code> callbacks to draw business-card-style nodes with avatars,
 			titles, departments, and status indicators.
 		</p>
 	</header>
@@ -856,9 +856,9 @@
 				maxGridCols={4}
 				showDotGrid={isFuturistic}
 				theme={themeOverrides}
-				{renderNode}
-				{measureNodeWidth}
-				getNodeLabel={(node) => node.data?.name || node.path}
+				{renderNodeCallback}
+				{measureNodeWidthCallback}
+				getNodeLabelCallback={(node) => node.data?.name || node.path}
 				onNodeContextMenu={getContextMenu}
 			/>
 		</div>

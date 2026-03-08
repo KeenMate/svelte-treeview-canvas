@@ -1,4 +1,5 @@
 import type {
+	LTreeNode,
 	LayoutNode,
 	GroupBox,
 	CanvasRenderContext,
@@ -25,6 +26,21 @@ const DZ_FONT = '10px sans-serif';
 
 const MINIMAP_MARGIN = 12;
 const MINIMAP_PAD = 6;
+
+// ── Badge Width Helper ──────────────────────────────────────────────────
+
+/** Compute badge width from resolved content string (0 when null/empty) */
+export function getBadgeWidth(badgeContent: string | null, _theme: CanvasTheme): number {
+	if (!badgeContent) return 0;
+	return 8 + badgeContent.length * 6;
+}
+
+/** Default badge content: child count for collapsed parents, null otherwise */
+export function defaultBadgeContent<T>(node: LTreeNode<T>): string | null {
+	if (!node.hasChildren || node.isExpanded) return null;
+	const count = Object.keys(node.children).length;
+	return count > 0 ? String(count) : null;
+}
 
 // ── Default Slot Renderers ──────────────────────────────────────────────
 
@@ -110,11 +126,32 @@ export function defaultRenderBody<T>(rctx: CanvasRenderContext<T>): void {
 
 	const textOffsetX = isV ? config.nodePaddingX : config.colorBarWidth + config.nodePaddingX;
 	const textX = x + textOffsetX;
-	const maxTextW = w - textOffsetX - config.nodePaddingX - (node.hasChildren ? 16 : 0);
+	const chevronW = node.hasChildren ? theme.chevronPaddingEnd + 2 : 0;
+	const badgeW = getBadgeWidth(rctx.badgeContent, theme);
+	const badgeGap = badgeW > 0 ? 4 : 0;
+	const maxTextW = w - textOffsetX - config.nodePaddingX - chevronW - badgeW - badgeGap;
 	const cy = y + h / 2;
 
-	// Simple truncation: measure and truncate inline
-	ctx.fillText(label, textX, cy, maxTextW > 0 ? maxTextW : undefined);
+	if (maxTextW <= 0) return;
+	const displayText = truncateText(ctx, label, maxTextW);
+	ctx.fillText(displayText, textX, cy);
+}
+
+/** Truncate text with ellipsis if it exceeds maxWidth */
+export function truncateText(ctx: CanvasRenderingContext2D, text: string, maxWidth: number): string {
+	if (ctx.measureText(text).width <= maxWidth) return text;
+	const ellipsis = '\u2026';
+	const ellipsisW = ctx.measureText(ellipsis).width;
+	const avail = maxWidth - ellipsisW;
+	if (avail <= 0) return ellipsis;
+	// Binary search for longest fitting prefix
+	let lo = 0, hi = text.length;
+	while (lo < hi) {
+		const mid = (lo + hi + 1) >> 1;
+		if (ctx.measureText(text.slice(0, mid)).width <= avail) lo = mid;
+		else hi = mid - 1;
+	}
+	return text.slice(0, lo) + ellipsis;
 }
 
 /** Default chevron renderer: expand/collapse indicator */
@@ -122,37 +159,27 @@ export function defaultRenderChevron<T>(rctx: CanvasRenderContext<T>): void {
 	const { ctx, node, bounds, theme } = rctx;
 	if (!node.hasChildren) return;
 
-	const chevX = bounds.x + bounds.w - 14;
+	const chevX = bounds.x + bounds.w - theme.chevronPaddingEnd;
 	ctx.fillStyle = theme.chevronColor;
-	ctx.font = `${theme.chevronSize}px sans-serif`;
+	ctx.font = `${theme.chevronFontWeight} ${theme.chevronSize}px ${theme.chevronFontFamily}`;
 	ctx.textBaseline = 'middle';
-	ctx.fillText(node.isExpanded ? '\u25BE' : '\u25B8', chevX, bounds.cy);
+	ctx.fillText(node.isExpanded ? theme.chevronExpanded : theme.chevronCollapsed, chevX, bounds.cy);
 }
 
-/** Default badge renderer: child count pill for collapsed nodes */
+/** Default badge renderer: child count inside the node, between label and chevron */
 export function defaultRenderBadge<T>(rctx: CanvasRenderContext<T>): void {
-	const { ctx, node, bounds, depthColor, config, theme } = rctx;
-	if (!node.hasChildren || node.isExpanded) return;
+	const { ctx, bounds, depthColor, theme, badgeContent } = rctx;
+	if (!badgeContent) return;
 
-	const count = Object.keys(node.children).length;
-	if (count <= 0) return;
-
-	const isV = config.growthDirection === 'up' || config.growthDirection === 'down';
-	const badgeText = String(count);
-	const digits = badgeText.length;
-	const badgeW = 8 + digits * 6;
+	const badgeW = getBadgeWidth(badgeContent, theme);
 	const badgeH = theme.badgeHeight;
-	const badgeR = badgeH / 2;
+	const badgeR = Math.min(theme.nodeRadius, badgeH / 2);
+	const chevronW = theme.chevronPaddingEnd + 2;
+	const gap = 4;
 
-	let badgeX: number;
-	let badgeY: number;
-	if (isV) {
-		badgeX = bounds.x + bounds.w / 2 - badgeW / 2;
-		badgeY = bounds.y + bounds.h + 2;
-	} else {
-		badgeX = bounds.x + bounds.w + 3;
-		badgeY = bounds.cy - badgeH / 2;
-	}
+	// Position badge inside the node, start-side of the chevron
+	const badgeX = bounds.x + bounds.w - chevronW - gap - badgeW;
+	const badgeY = bounds.cy - badgeH / 2;
 
 	ctx.fillStyle = depthColor;
 	ctx.beginPath();
@@ -163,7 +190,7 @@ export function defaultRenderBadge<T>(rctx: CanvasRenderContext<T>): void {
 	ctx.fillStyle = theme.badgeText;
 	ctx.textBaseline = 'middle';
 	ctx.textAlign = 'center';
-	ctx.fillText(badgeText, badgeX + badgeW / 2, badgeY + badgeH / 2);
+	ctx.fillText(badgeContent, badgeX + badgeW / 2, badgeY + badgeH / 2);
 	ctx.textAlign = 'start';
 }
 
@@ -174,6 +201,7 @@ function buildRenderContext<T>(
 	ctx: CanvasRenderingContext2D,
 	ln: LayoutNode<T>,
 	label: string,
+	badgeContent: string | null,
 	state: CanvasNodeState,
 	lod: LodLevel,
 	config: CanvasVisualConfig,
@@ -189,7 +217,7 @@ function buildRenderContext<T>(
 		depth: ln.depth
 	};
 	const depthColor = config.getDepthColor(ln.depth);
-	return { ctx, node: ln.node, label, bounds, state, lod, depthColor, config, theme };
+	return { ctx, node: ln.node, label, badgeContent, bounds, state, lod, depthColor, config, theme };
 }
 
 /** Draw a single node, delegating to slot callbacks */
@@ -197,22 +225,23 @@ export function drawNode<T>(
 	ctx: CanvasRenderingContext2D,
 	ln: LayoutNode<T>,
 	label: string,
+	badgeContent: string | null,
 	state: CanvasNodeState,
 	lod: LodLevel,
 	config: CanvasVisualConfig,
 	slots: NodeRenderSlots<T>,
 	theme: CanvasTheme
 ): void {
-	const rctx = buildRenderContext(ctx, ln, label, state, lod, config, theme);
+	const rctx = buildRenderContext(ctx, ln, label, badgeContent, state, lod, config, theme);
 
 	// Full override — no clipping (user controls everything)
-	if (slots.renderNode) {
-		slots.renderNode(rctx);
+	if (slots.renderNodeCallback) {
+		slots.renderNodeCallback(rctx);
 		return;
 	}
 
 	// Background is drawn outside clip so its stroke isn't clipped
-	(slots.renderBackground ?? defaultRenderBackground)(rctx);
+	(slots.renderBackgroundCallback ?? defaultRenderBackground)(rctx);
 
 	// Clip to the card shape so color bar / badge / body can't escape
 	ctx.save();
@@ -220,14 +249,12 @@ export function drawNode<T>(
 	ctx.roundRect(ln.x, ln.y, ln.w, ln.h, theme.nodeRadius);
 	ctx.clip();
 
-	(slots.renderColorBar ?? defaultRenderColorBar)(rctx);
-	(slots.renderBody ?? defaultRenderBody)(rctx);
-	(slots.renderChevron ?? defaultRenderChevron)(rctx);
+	(slots.renderColorBarCallback ?? defaultRenderColorBar)(rctx);
+	(slots.renderBodyCallback ?? defaultRenderBody)(rctx);
+	(slots.renderBadgeCallback ?? defaultRenderBadge)(rctx);
+	(slots.renderChevronCallback ?? defaultRenderChevron)(rctx);
 
 	ctx.restore();
-
-	// Badge is drawn outside the card (positioned adjacent)
-	(slots.renderBadge ?? defaultRenderBadge)(rctx);
 }
 
 // ── Connection Lines ────────────────────────────────────────────────────

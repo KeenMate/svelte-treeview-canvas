@@ -347,7 +347,7 @@
 
 	// ── Render Callbacks ──────────────────────────────────────────────────
 
-	const measureNodeWidth: MeasureNodeWidthCallback<PlayoffGame> = () => CARD_W;
+	const measureNodeWidthCallback: MeasureNodeWidthCallback<PlayoffGame> = () => CARD_W;
 
 	function drawTruncated(ctx: CanvasRenderingContext2D, text: string, x: number, y: number, maxW: number) {
 		if (ctx.measureText(text).width <= maxW) {
@@ -365,7 +365,7 @@
 		ctx.fillText(text.slice(0, lo) + ellipsis, x, y);
 	}
 
-	function renderNode(rctx: CanvasRenderContext<PlayoffGame>) {
+	function renderNodeCallback(rctx: CanvasRenderContext<PlayoffGame>) {
 		const { ctx, node, bounds, state, lod } = rctx;
 		const { x, y, w, h } = bounds;
 		const game = node.data;
@@ -525,7 +525,7 @@
 		<h1>NHL Playoff Bracket</h1>
 		<p class="subtitle">
 			A 128-team tournament bracket rendered with <code>&lt;CanvasTree&gt;</code> using a
-			custom <code>renderNode</code> callback. 7 rounds, 127 matchup nodes with team colors,
+			custom <code>renderNodeCallback</code> callback. 7 rounds, 127 matchup nodes with team colors,
 			seeds, and series scores.
 		</p>
 	</header>
@@ -631,9 +631,9 @@
 				levelSpacingV={70}
 				colorBarWidth={4}
 				fontSize={11}
-				{renderNode}
-				{measureNodeWidth}
-				getNodeLabel={(node) => node.data ? `${node.data.teamA.abbrev} vs ${node.data.teamB.abbrev}` : node.path}
+				{renderNodeCallback}
+				{measureNodeWidthCallback}
+				getNodeLabelCallback={(node) => node.data ? `${node.data.teamA.abbrev} vs ${node.data.teamB.abbrev}` : node.path}
 			/>
 		</div>
 

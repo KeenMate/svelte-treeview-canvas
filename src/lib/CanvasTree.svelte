@@ -1,7 +1,7 @@
 <script lang="ts" generics="T">
 	import { type Snippet, onDestroy } from 'svelte';
 	import { TreeProvider, TreeController, type TreeControllerProps } from '@keenmate/svelte-treeview';
-	import type { LTreeNode, DropPosition, ContextMenuItem } from '@keenmate/svelte-treeview';
+	import type { LTreeNode, DropPosition, ContextMenuEntry } from '@keenmate/svelte-treeview';
 	import type {
 		Orientation,
 		GrowthDirection,
@@ -19,6 +19,7 @@
 		MeasureNodeWidthCallback,
 		MeasureNodeHeightCallback,
 		GetNodeLabelCallback,
+		GetBadgeContentCallback,
 		LodLevel,
 		CanvasLevelConfig,
 		FocusOptions
@@ -40,7 +41,9 @@
 		drawDragGhost,
 		drawNode,
 		drawNodeSimple,
-		drawNodeMedium
+		drawNodeMedium,
+		getBadgeWidth,
+		defaultBadgeContent
 	} from './canvas-renderer.js';
 	import { createInteractionManager } from './canvas-interaction.js';
 
@@ -99,6 +102,7 @@
 		collapsible?: boolean;
 		nodeHeight?: number;
 		nodeMinWidth?: number;
+		nodeMaxWidth?: number;
 		nodePaddingX?: number;
 		nodeGap?: number;
 		columnGap?: number;
@@ -116,15 +120,16 @@
 		levelConfig?: CanvasLevelConfig[];
 
 		// Render callbacks
-		renderNode?: RenderNodeCallback<T>;
-		renderBackground?: RenderSlotCallback<T>;
-		renderColorBar?: RenderSlotCallback<T>;
-		renderBody?: RenderSlotCallback<T>;
-		renderChevron?: RenderSlotCallback<T>;
-		renderBadge?: RenderSlotCallback<T>;
-		measureNodeWidth?: MeasureNodeWidthCallback<T>;
-		measureNodeHeight?: MeasureNodeHeightCallback<T>;
-		getNodeLabel?: GetNodeLabelCallback<T>;
+		renderNodeCallback?: RenderNodeCallback<T>;
+		renderBackgroundCallback?: RenderSlotCallback<T>;
+		renderColorBarCallback?: RenderSlotCallback<T>;
+		renderBodyCallback?: RenderSlotCallback<T>;
+		renderChevronCallback?: RenderSlotCallback<T>;
+		renderBadgeCallback?: RenderSlotCallback<T>;
+		measureNodeWidthCallback?: MeasureNodeWidthCallback<T>;
+		measureNodeHeightCallback?: MeasureNodeHeightCallback<T>;
+		getNodeLabelCallback?: GetNodeLabelCallback<T>;
+		getBadgeContentCallback?: GetBadgeContentCallback<T>;
 
 		// Bindable state
 		selectedPath?: string | null;
@@ -133,7 +138,7 @@
 		// Events
 		onNodeClick?: (node: LTreeNode<T>) => void;
 		onNodeDrop?: (source: LTreeNode<T>, target: LTreeNode<T>, position: DropPosition) => void;
-		onNodeContextMenu?: (node: LTreeNode<T>) => ContextMenuItem[];
+		onNodeContextMenu?: (node: LTreeNode<T>) => ContextMenuEntry[];
 
 		// Metrics (bindable, readonly)
 		layoutTime?: number;
@@ -188,18 +193,19 @@
 		sunburstRootTitle,
 		groupSiblings = $bindable(true),
 		showDotGrid = $bindable(false),
-		clickBehavior = $bindable('expand'),
+		clickBehavior = $bindable('expand-and-focus'),
 		collapsible = true,
-		nodeHeight = $bindable(28),
-		nodeMinWidth = $bindable(100),
-		nodePaddingX = $bindable(14),
-		nodeGap = $bindable(6),
-		columnGap = $bindable(40),
-		levelSpacingV = $bindable(60),
-		colorBarWidth = $bindable(3),
-		depthColors = $bindable(['#f59e0b', '#0d9488', '#7c3aed', '#ec4899']),
-		fontSize = $bindable(12),
-		fontFamily = $bindable('"SF Mono", "Cascadia Code", "Fira Code", monospace'),
+		nodeHeight = $bindable<number | undefined>(undefined),
+		nodeMinWidth = $bindable<number | undefined>(undefined),
+		nodeMaxWidth = $bindable<number | undefined>(undefined),
+		nodePaddingX = $bindable<number | undefined>(undefined),
+		nodeGap = $bindable<number | undefined>(undefined),
+		columnGap = $bindable<number | undefined>(undefined),
+		levelSpacingV = $bindable<number | undefined>(undefined),
+		colorBarWidth = $bindable<number | undefined>(undefined),
+		depthColors = $bindable<string[] | undefined>(undefined),
+		fontSize = $bindable<number | undefined>(undefined),
+		fontFamily = $bindable<string | undefined>(undefined),
 		zoomLodText = $bindable(0.35),
 		zoomLodSimple = $bindable(0.12),
 		gridGap = $bindable(4),
@@ -209,15 +215,16 @@
 		levelConfig,
 
 		// Render callbacks
-		renderNode,
-		renderBackground,
-		renderColorBar,
-		renderBody,
-		renderChevron,
-		renderBadge,
-		measureNodeWidth: measureNodeWidthCb,
-		measureNodeHeight: measureNodeHeightCb,
-		getNodeLabel: getNodeLabelCb,
+		renderNodeCallback,
+		renderBackgroundCallback,
+		renderColorBarCallback,
+		renderBodyCallback,
+		renderChevronCallback,
+		renderBadgeCallback,
+		measureNodeWidthCallback,
+		measureNodeHeightCallback,
+		getNodeLabelCallback,
+		getBadgeContentCallback,
 
 		// Bindable state
 		selectedPath = $bindable(null),
@@ -269,40 +276,81 @@
 	const textCache = createTextCache();
 
 	// Theme: resolved from defaults → CSS variables → prop overrides
-	let resolvedTheme: CanvasTheme = defaultCanvasTheme;
+	let resolvedTheme: CanvasTheme = $state(defaultCanvasTheme);
+
+	// Font: read --base-font-family from CSS as fallback
+	let cssFontFamily = $state('');
 
 	function buildTheme() {
 		const cssOverrides = containerEl ? readCssTheme(containerEl) : {};
 		resolvedTheme = resolveTheme(cssOverrides, themePropOverrides ?? {});
+
+		// Read --base-font-family (or --ct-font-family) for canvas text rendering
+		if (containerEl) {
+			const style = getComputedStyle(containerEl);
+			cssFontFamily = (
+				style.getPropertyValue('--ct-font-family').trim() ||
+				style.getPropertyValue('--base-font-family').trim()
+			);
+		}
 	}
 
-	// Derived font strings
-	let fontStr = $derived(`${fontSize}px ${fontFamily}`);
-	let fontBold = $derived(`bold ${fontSize}px ${fontFamily}`);
+	// ── Effective geometry: prop → theme (which is --ct-* → --base-* → default) ──
+
+	let eNodeHeight   = $derived(nodeHeight   ?? resolvedTheme.nodeHeight);
+	let eNodeMinWidth = $derived(nodeMinWidth ?? resolvedTheme.nodeMinWidth);
+	let eNodeMaxWidth = $derived(nodeMaxWidth ?? resolvedTheme.nodeMaxWidth);
+	let eNodePaddingX = $derived(nodePaddingX ?? resolvedTheme.nodePaddingX);
+	let eNodeGap      = $derived(nodeGap      ?? resolvedTheme.nodeGap);
+	let eColumnGap    = $derived(columnGap    ?? resolvedTheme.columnGap);
+	let eLevelSpacingV= $derived(levelSpacingV?? resolvedTheme.levelSpacingV);
+	let eColorBarWidth= $derived(colorBarWidth?? resolvedTheme.colorBarWidth);
+	let eFontSize     = $derived(fontSize     ?? resolvedTheme.fontSize);
+
+	// Derived font strings — prop wins, then CSS variable, then default
+	let effectiveFamily = $derived(fontFamily || cssFontFamily || '"SF Mono", "Cascadia Code", "Fira Code", monospace');
+	let fontStr = $derived(`${eFontSize}px ${effectiveFamily}`);
+	let fontBold = $derived(`bold ${eFontSize}px ${effectiveFamily}`);
 
 	// ── Depth Color ────────────────────────────────────────────────────
 
+	// Build 10-color array from theme, overridable by depthColors prop
+	const themeDepthColors = $derived([
+		resolvedTheme.depthColor0, resolvedTheme.depthColor1,
+		resolvedTheme.depthColor2, resolvedTheme.depthColor3,
+		resolvedTheme.depthColor4, resolvedTheme.depthColor5,
+		resolvedTheme.depthColor6, resolvedTheme.depthColor7,
+		resolvedTheme.depthColor8, resolvedTheme.depthColor9,
+	]);
+	const eDepthColors = $derived(depthColors ?? themeDepthColors);
+
 	function getDepthColor(depth: number): string {
-		return levelConfig?.[depth]?.color ?? depthColors[depth % depthColors.length];
+		return levelConfig?.[depth]?.color ?? eDepthColors[depth % eDepthColors.length];
 	}
 
 	// ── Node Label ──────────────────────────────────────────────────────
 
 	function getLabel(node: LTreeNode<T>): string {
-		if (getNodeLabelCb) return getNodeLabelCb(node);
+		if (getNodeLabelCallback) return getNodeLabelCallback(node);
 		if (ctrlRef) return ctrlRef.tree.getNodeDisplayValue(node);
 		return (node.data as Record<string, unknown>)?.name as string || node.path;
+	}
+
+	function getBadgeContent(node: LTreeNode<T>): string | null {
+		if (getBadgeContentCallback) return getBadgeContentCallback(node);
+		return defaultBadgeContent(node);
 	}
 
 	// ── Node Width Measurement ──────────────────────────────────────────
 
 	function measureNodeWidthFn(treeNode: LTreeNode<T>): number {
-		if (measureNodeWidthCb) {
-			return measureNodeWidthCb(treeNode, textCache.getTextWidth, {
-				nodeHeight,
-				nodeMinWidth,
-				nodePaddingX,
-				colorBarWidth,
+		if (measureNodeWidthCallback) {
+			return measureNodeWidthCallback(treeNode, textCache.getTextWidth, {
+				nodeHeight: eNodeHeight,
+				nodeMinWidth: eNodeMinWidth,
+				nodeMaxWidth: eNodeMaxWidth,
+				nodePaddingX: eNodePaddingX,
+				colorBarWidth: eColorBarWidth,
 				font: fontStr,
 				fontBold,
 				getDepthColor,
@@ -311,8 +359,12 @@
 		}
 		const label = getLabel(treeNode);
 		const tw = textCache.getTextWidth(label);
-		const chevronW = treeNode.hasChildren ? 16 : 0;
-		return Math.max(nodeMinWidth, tw + nodePaddingX * 2 + colorBarWidth + chevronW);
+		const chevronW = treeNode.hasChildren ? resolvedTheme.chevronPaddingEnd + 2 : 0;
+		const badgeW = getBadgeWidth(getBadgeContent(treeNode), resolvedTheme);
+		const badgeGap = badgeW > 0 ? 4 : 0;
+		let w = Math.max(eNodeMinWidth, tw + eNodePaddingX * 2 + eColorBarWidth + chevronW + badgeW + badgeGap);
+		if (eNodeMaxWidth > 0) w = Math.min(w, eNodeMaxWidth);
+		return w;
 	}
 
 	// ── Layout ──────────────────────────────────────────────────────────
@@ -326,23 +378,23 @@
 			groupSiblings,
 			measureNodeWidthFn,
 			{
-				nodeHeight,
-				nodeGap,
-				columnGap,
-				levelSpacingV,
+				nodeHeight: eNodeHeight,
+				nodeGap: eNodeGap,
+				columnGap: eColumnGap,
+				levelSpacingV: eLevelSpacingV,
 				gridGap,
 				groupPadding,
 				maxGridCols,
 				gridNodeMinW: 120,
 				gridNodeMaxW,
-				nodeMinWidth,
+				nodeMinWidth: eNodeMinWidth,
 				levelOverrides: levelConfig
 			},
 			layoutMode,
 			{
 				balancedSplit,
 				radialStartAngle,
-				radialSpacing: radialSpacing ?? columnGap * 3,
+				radialSpacing: radialSpacing ?? eColumnGap * 3,
 				sunburstRingWidth,
 				sunburstRootTitle
 			}
@@ -428,13 +480,13 @@
 		if (layoutMode === 'sunburst') {
 			// no connection lines
 		} else if (layoutMode === 'balanced') {
-			drawBalancedConnections(ctx, layoutNodes, vl, vt, vr, vb, theme, columnGap, levelSpacingV);
+			drawBalancedConnections(ctx, layoutNodes, vl, vt, vr, vb, theme, eColumnGap, eLevelSpacingV);
 		} else if (layoutMode === 'radial') {
 			drawRadialConnections(ctx, layoutNodes, vl, vt, vr, vb, theme);
 		} else if (layoutMode === 'fishbone') {
 			drawFishboneConnections(ctx, layoutNodes, isV, vl, vt, vr, vb, theme);
 		} else if (layoutMode !== 'box') {
-			drawConnections(ctx, layoutNodes, levelXArr, isV, isReversed, columnGap, levelSpacingV, vl, vt, vr, vb, theme);
+			drawConnections(ctx, layoutNodes, levelXArr, isV, isReversed, eColumnGap, eLevelSpacingV, vl, vt, vr, vb, theme);
 		}
 		const tConn = performance.now();
 
@@ -462,10 +514,11 @@
 			const lodSimple = iState.zoom < zoomLodSimple;
 
 			const visualConfig: CanvasVisualConfig = {
-				nodeHeight,
-				nodeMinWidth,
-				nodePaddingX,
-				colorBarWidth,
+				nodeHeight: eNodeHeight,
+				nodeMinWidth: eNodeMinWidth,
+				nodeMaxWidth: eNodeMaxWidth,
+				nodePaddingX: eNodePaddingX,
+				colorBarWidth: eColorBarWidth,
 				font: fontStr,
 				fontBold,
 				getDepthColor,
@@ -473,12 +526,12 @@
 			};
 
 			const slots: NodeRenderSlots<T> = {
-				renderNode,
-				renderBackground,
-				renderColorBar,
-				renderBody,
-				renderChevron,
-				renderBadge
+				renderNodeCallback,
+				renderBackgroundCallback,
+				renderColorBarCallback,
+				renderBodyCallback,
+				renderChevronCallback,
+				renderBadgeCallback
 			};
 
 			for (const n of layoutNodes) {
@@ -505,7 +558,7 @@
 
 				// LOD: medium
 				if (!lodText) {
-					drawNodeMedium(ctx, n, depthColor, isSelected, isDropTgt, isMatch, isCurrent, colorBarWidth, isV, theme);
+					drawNodeMedium(ctx, n, depthColor, isSelected, isDropTgt, isMatch, isCurrent, eColorBarWidth, isV, theme);
 					ctx.globalAlpha = 1;
 					continue;
 				}
@@ -522,7 +575,7 @@
 				};
 
 				const lod: LodLevel = 'full';
-				drawNode(ctx, n, getLabel(n.node), state, lod, visualConfig, slots, theme);
+				drawNode(ctx, n, getLabel(n.node), getBadgeContent(n.node), state, lod, visualConfig, slots, theme);
 
 				ctx.globalAlpha = 1;
 			}
@@ -544,8 +597,8 @@
 				iState.dragX,
 				iState.dragY,
 				fontStr,
-				colorBarWidth,
-				nodePaddingX,
+				eColorBarWidth,
+				eNodePaddingX,
 				(ln) => getLabel(ln.node),
 				theme
 			);
@@ -872,13 +925,62 @@
 		return findNearest(currentLn, candidates, axis, forward);
 	}
 
+	// ── Context menu keyboard shortcut handling ──────────────────────────
+	function parseShortcut(shortcut: string): { key: string; ctrl: boolean; shift: boolean; alt: boolean } {
+		const parts = shortcut.split('+').map(p => p.trim());
+		const key = parts.pop()!;
+		return {
+			key: key.toLowerCase(),
+			ctrl: parts.some(p => p.toLowerCase() === 'ctrl'),
+			shift: parts.some(p => p.toLowerCase() === 'shift'),
+			alt: parts.some(p => p.toLowerCase() === 'alt'),
+		};
+	}
+
+	function findEntryByShortcut(entries: ContextMenuEntry[], event: KeyboardEvent): ContextMenuEntry | null {
+		for (const entry of entries) {
+			if ('divider' in entry) continue;
+			if (entry.isVisible === false || entry.isDisabled) continue;
+			if (entry.shortcut) {
+				const parsed = parseShortcut(entry.shortcut);
+				const eventKey = event.key.length === 1 ? event.key.toLowerCase() : event.key;
+				if (eventKey === parsed.key && event.ctrlKey === parsed.ctrl && event.shiftKey === parsed.shift && event.altKey === parsed.alt) {
+					return entry;
+				}
+			}
+			if (entry.children) {
+				const found = findEntryByShortcut(entry.children, event);
+				if (found) return found;
+			}
+		}
+		return null;
+	}
+
 	function onKeyDown(e: KeyboardEvent) {
 		// Don't handle keys when focus is in input fields
 		if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
 
-		if (e.key === 'Escape' && ctrlRef?.contextMenuVisible) {
-			ctrlRef.closeContextMenu();
-			return;
+		if (ctrlRef?.contextMenuVisible) {
+			if (e.key === 'Escape') {
+				ctrlRef.closeContextMenu();
+				return;
+			}
+
+			// Match keyboard shortcuts against context menu entries
+			if (ctrlRef.contextMenuNode && onNodeContextMenuCb) {
+				const entries = onNodeContextMenuCb(ctrlRef.contextMenuNode);
+				const match = findEntryByShortcut(entries, e);
+				if (match && !('divider' in match) && match.onclick) {
+					e.preventDefault();
+					try {
+						match.onclick();
+					} catch (error) {
+						console.error('Context menu shortcut error:', error);
+					}
+					ctrlRef.closeContextMenu();
+					return;
+				}
+			}
 		}
 
 		if (!ctrlRef || !selectedPath) return;
@@ -1219,10 +1321,10 @@
 		const _grouped = groupSiblings;
 		const _dots = showDotGrid;
 		const _layoutMode = layoutMode;
-		// Track all layout-affecting state
-		void [columnGap, gridNodeMaxW, nodeHeight, nodeGap, levelSpacingV,
-			nodePaddingX, nodeMinWidth, colorBarWidth, fontSize, fontFamily,
-			gridGap, groupPadding, maxGridCols, depthColors, levelConfig,
+		// Track all layout-affecting state (effective values resolve prop → theme)
+		void [eColumnGap, gridNodeMaxW, eNodeHeight, eNodeGap, eLevelSpacingV,
+			eNodePaddingX, eNodeMinWidth, eColorBarWidth, eFontSize, fontFamily,
+			gridGap, groupPadding, maxGridCols, eDepthColors, levelConfig,
 			zoomLodText, zoomLodSimple, balancedSplit, radialStartAngle, radialSpacing,
 			sunburstRingWidth, sunburstRootTitle];
 		console.log('[effect:relayout] triggered — changeTracker or config changed');
@@ -1580,21 +1682,56 @@
 		{/if}
 
 		{#if ctrl.contextMenuVisible && ctrl.contextMenuNode}
-			{@const menuItems = ctrl.contextMenuCallbackCb?.(ctrl.contextMenuNode, ctrl.closeContextMenu.bind(ctrl)) || []}
-			<div class="canvas-tree-ctx-menu" style="position: fixed; left: {ctrl.contextMenuX}px; top: {ctrl.contextMenuY}px;">
+			{@const menuEntries = ctrl.contextMenuCallbackCb?.(ctrl.contextMenuNode, ctrl.closeContextMenu.bind(ctrl)) || []}
+			<div class="canvas-tree-ctx-menu" style="position: fixed; left: {ctrl.contextMenuX}px; top: {ctrl.contextMenuY}px;" role="menu">
 				<div class="canvas-tree-ctx-menu-header">{getLabel(ctrl.contextMenuNode as LTreeNode<T>)}</div>
-				{#each menuItems as item}
-					{#if item.isDivider}
-						<div class="canvas-tree-ctx-menu-divider"></div>
-					{:else}
-						<button
-							class="canvas-tree-ctx-menu-item"
-							class:disabled={item.isDisabled}
-							disabled={item.isDisabled}
-							onclick={() => { item.callback(); ctrl.closeContextMenu(); }}
-						>{item.icon ? `${item.icon} ` : ''}{item.title}</button>
-					{/if}
-				{/each}
+				{#snippet renderCanvasEntries(entries: ContextMenuEntry[])}
+					{#each entries as entry}
+						{#if 'divider' in entry}
+							<div class="canvas-tree-ctx-menu-divider" role="separator">
+								{#if entry.label}
+									<span class="canvas-tree-ctx-menu-divider-label">{entry.label}</span>
+								{/if}
+							</div>
+						{:else if entry.isVisible !== false}
+							{@const hasChildren = entry.children && entry.children.length > 0}
+							<button
+								class="canvas-tree-ctx-menu-item {entry.className || ''}"
+								class:disabled={entry.isDisabled}
+								class:has-children={hasChildren}
+								disabled={entry.isDisabled}
+								role="menuitem"
+								onclick={async () => {
+									if (!hasChildren) {
+										try {
+											await entry.onclick?.();
+										} catch (error) {
+											console.error('Context menu callback error:', error);
+										}
+										ctrl.closeContextMenu();
+									}
+								}}
+							>
+								{#if entry.icon}
+									<span class="canvas-tree-ctx-menu-icon">{entry.icon}</span>
+								{/if}
+								<span class="canvas-tree-ctx-menu-label">{entry.label}</span>
+								{#if entry.shortcut}
+									<span class="canvas-tree-ctx-menu-shortcut">{entry.shortcut}</span>
+								{/if}
+								{#if hasChildren}
+									<span class="canvas-tree-ctx-menu-arrow">&#x25B8;</span>
+								{/if}
+							</button>
+							{#if hasChildren}
+								<div class="canvas-tree-ctx-submenu" role="menu">
+									{@render renderCanvasEntries(entry.children!)}
+								</div>
+							{/if}
+						{/if}
+					{/each}
+				{/snippet}
+				{@render renderCanvasEntries(menuEntries)}
 			</div>
 		{/if}
 	{/snippet}
@@ -1646,6 +1783,7 @@
 		min-width: 160px;
 		z-index: 1000;
 		box-shadow: 0 8px 24px rgba(0, 0, 0, 0.25);
+		position: relative;
 	}
 
 	.canvas-tree-ctx-menu-header {
@@ -1660,7 +1798,8 @@
 	}
 
 	.canvas-tree-ctx-menu-item {
-		display: block;
+		display: flex;
+		align-items: center;
 		width: 100%;
 		padding: 6px 12px;
 		border: none;
@@ -1670,6 +1809,7 @@
 		text-align: left;
 		cursor: pointer;
 		white-space: nowrap;
+		position: relative;
 	}
 
 	.canvas-tree-ctx-menu-item:hover:not(:disabled) {
@@ -1681,9 +1821,94 @@
 		cursor: default;
 	}
 
+	.canvas-tree-ctx-menu-item.danger {
+		color: #f87171;
+	}
+
+	.canvas-tree-ctx-menu-item.danger:hover:not(:disabled) {
+		background: rgba(248, 113, 113, 0.15);
+	}
+
+	.canvas-tree-ctx-menu-item.has-children {
+		cursor: default;
+	}
+
+	.canvas-tree-ctx-menu-icon {
+		margin-right: 8px;
+		font-size: 0.75rem;
+		width: 16px;
+		text-align: center;
+		flex-shrink: 0;
+	}
+
+	.canvas-tree-ctx-menu-label {
+		flex-grow: 1;
+	}
+
+	.canvas-tree-ctx-menu-shortcut {
+		margin-left: auto;
+		padding-left: 16px;
+		color: #64748b;
+		font-size: 0.7rem;
+		flex-shrink: 0;
+	}
+
+	.canvas-tree-ctx-menu-arrow {
+		margin-left: 8px;
+		font-size: 0.65rem;
+		color: #64748b;
+		flex-shrink: 0;
+	}
+
 	.canvas-tree-ctx-menu-divider {
+		display: flex;
+		align-items: center;
+		margin: 4px 0;
 		height: 1px;
 		background: var(--ct-menu-hover, #334155);
-		margin: 4px 0;
+	}
+
+	.canvas-tree-ctx-menu-divider:has(.canvas-tree-ctx-menu-divider-label) {
+		height: auto;
+		background: none;
+		gap: 8px;
+		padding: 0 12px;
+	}
+
+	.canvas-tree-ctx-menu-divider:has(.canvas-tree-ctx-menu-divider-label)::before,
+	.canvas-tree-ctx-menu-divider:has(.canvas-tree-ctx-menu-divider-label)::after {
+		content: '';
+		flex: 1;
+		height: 1px;
+		background: var(--ct-menu-hover, #334155);
+	}
+
+	.canvas-tree-ctx-menu-divider-label {
+		font-size: 0.65rem;
+		color: #64748b;
+		white-space: nowrap;
+		text-transform: uppercase;
+		letter-spacing: 0.05em;
+	}
+
+	.canvas-tree-ctx-submenu {
+		position: absolute;
+		left: 100%;
+		top: 0;
+		background: var(--ct-menu-bg, #1e293b);
+		border-radius: var(--ct-menu-radius, 8px);
+		padding: 4px 0;
+		min-width: 140px;
+		z-index: 1001;
+		box-shadow: 0 8px 24px rgba(0, 0, 0, 0.25);
+		display: none;
+	}
+
+	.canvas-tree-ctx-menu-item.has-children:hover + .canvas-tree-ctx-submenu {
+		display: block;
+	}
+
+	.canvas-tree-ctx-submenu:hover {
+		display: block;
 	}
 </style>

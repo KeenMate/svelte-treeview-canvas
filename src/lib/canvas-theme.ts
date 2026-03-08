@@ -1,10 +1,39 @@
 // ── Canvas Theme ─────────────────────────────────────────────────────────
 // All visual values for canvas-rendered elements, readable from CSS custom
 // properties (--ct-*) and overridable via props.
+//
+// Priority chain: prop overrides → --ct-* (component) → --base-* (shared theme) → hardcoded default
+//
+// --base-* variables are shared design tokens set by the app's theme system.
+// They allow all KeenMate components (web-treeview, svelte-treeview, canvas-tree)
+// to inherit a consistent palette from a single set of CSS variables.
 
 export interface CanvasTheme {
 	// Canvas
 	bg: string;
+
+	// Node geometry (also settable as direct props — props override theme)
+	nodeHeight: number;
+	nodeMinWidth: number;
+	nodeMaxWidth: number;  // 0 = unlimited
+	nodePaddingX: number;
+	nodeGap: number;
+	columnGap: number;
+	levelSpacingV: number;
+	colorBarWidth: number;
+	fontSize: number;
+
+	// Depth colors (color bar + badge bg, 10 levels, cycles)
+	depthColor0: string;
+	depthColor1: string;
+	depthColor2: string;
+	depthColor3: string;
+	depthColor4: string;
+	depthColor5: string;
+	depthColor6: string;
+	depthColor7: string;
+	depthColor8: string;
+	depthColor9: string;
 
 	// Node (idle)
 	nodeBg: string;
@@ -34,6 +63,11 @@ export interface CanvasTheme {
 	// Chevron
 	chevronColor: string;
 	chevronSize: number;
+	chevronExpanded: string;
+	chevronCollapsed: string;
+	chevronFontFamily: string;
+	chevronFontWeight: string;
+	chevronPaddingEnd: number;
 
 	// Badge
 	badgeText: string;
@@ -82,6 +116,27 @@ export interface CanvasTheme {
 export const defaultCanvasTheme: CanvasTheme = {
 	bg: '#f8fafc',
 
+	nodeHeight: 28,
+	nodeMinWidth: 100,
+	nodeMaxWidth: 0,
+	nodePaddingX: 14,
+	nodeGap: 6,
+	columnGap: 40,
+	levelSpacingV: 60,
+	colorBarWidth: 3,
+	fontSize: 12,
+
+	depthColor0: '#f59e0b',
+	depthColor1: '#0d9488',
+	depthColor2: '#7c3aed',
+	depthColor3: '#ec4899',
+	depthColor4: '#3b82f6',
+	depthColor5: '#10b981',
+	depthColor6: '#f97316',
+	depthColor7: '#6366f1',
+	depthColor8: '#14b8a6',
+	depthColor9: '#e11d48',
+
 	nodeBg: '#ffffff',
 	nodeBorder: '#e2e8f0',
 	nodeBorderWidth: 1.5,
@@ -104,6 +159,11 @@ export const defaultCanvasTheme: CanvasTheme = {
 
 	chevronColor: '#94a3b8',
 	chevronSize: 10,
+	chevronExpanded: '\u25BE',
+	chevronCollapsed: '\u25B8',
+	chevronFontFamily: 'sans-serif',
+	chevronFontWeight: 'normal',
+	chevronPaddingEnd: 14,
 
 	badgeText: '#ffffff',
 	badgeHeight: 14,
@@ -142,20 +202,48 @@ export const defaultCanvasTheme: CanvasTheme = {
 
 // ── CSS Variable Reading ─────────────────────────────────────────────────
 
-/** CSS variable name → theme key mapping */
-const CSS_VAR_MAP: [string, keyof CanvasTheme, 'string' | 'number'][] = [
-	['--ct-bg',                  'bg',                  'string'],
+/**
+ * CSS variable mapping: [--ct-* var, theme key, type, optional --base-* fallback]
+ *
+ * Priority: --ct-* (component-specific) → --base-* (shared theme) → hardcoded default
+ * This mirrors the web-treeview pattern where --tv-* falls back to --base-*.
+ */
+const CSS_VAR_MAP: [string, keyof CanvasTheme, 'string' | 'number', string?][] = [
+	['--ct-bg',                  'bg',                  'string', '--base-main-bg'],
 
-	['--ct-node-bg',             'nodeBg',              'string'],
-	['--ct-node-border',         'nodeBorder',          'string'],
+	// Node geometry
+	['--ct-node-height',         'nodeHeight',          'number'],
+	['--ct-node-min-width',      'nodeMinWidth',        'number'],
+	['--ct-node-max-width',      'nodeMaxWidth',        'number'],
+	['--ct-node-padding-x',      'nodePaddingX',        'number'],
+	['--ct-node-gap',            'nodeGap',             'number'],
+	['--ct-column-gap',          'columnGap',           'number'],
+	['--ct-level-spacing-v',     'levelSpacingV',       'number'],
+	['--ct-color-bar-width',     'colorBarWidth',       'number'],
+	['--ct-font-size',           'fontSize',            'number'],
+
+	// Depth colors (--ct-depth-color-N → --pa-color-N → default)
+	['--ct-depth-color-0',       'depthColor0',         'string', '--pa-color-1'],
+	['--ct-depth-color-1',       'depthColor1',         'string', '--pa-color-2'],
+	['--ct-depth-color-2',       'depthColor2',         'string', '--pa-color-3'],
+	['--ct-depth-color-3',       'depthColor3',         'string', '--pa-color-4'],
+	['--ct-depth-color-4',       'depthColor4',         'string', '--pa-color-5'],
+	['--ct-depth-color-5',       'depthColor5',         'string', '--pa-color-6'],
+	['--ct-depth-color-6',       'depthColor6',         'string', '--pa-color-7'],
+	['--ct-depth-color-7',       'depthColor7',         'string', '--pa-color-8'],
+	['--ct-depth-color-8',       'depthColor8',         'string', '--pa-color-9'],
+	['--ct-depth-color-9',       'depthColor9',         'string'],
+
+	['--ct-node-bg',             'nodeBg',              'string', '--base-elevated-bg'],
+	['--ct-node-border',         'nodeBorder',          'string', '--base-border-color'],
 	['--ct-node-border-width',   'nodeBorderWidth',     'number'],
 	['--ct-node-radius',         'nodeRadius',          'number'],
-	['--ct-node-text',           'nodeText',            'string'],
+	['--ct-node-text',           'nodeText',            'string', '--base-text-color-1'],
 
-	['--ct-node-selected-bg',    'nodeSelectedBg',      'string'],
-	['--ct-node-selected-border','nodeSelectedBorder',  'string'],
+	['--ct-node-selected-bg',    'nodeSelectedBg',      'string', '--base-accent-color-light'],
+	['--ct-node-selected-border','nodeSelectedBorder',   'string', '--base-accent-color'],
 
-	['--ct-node-hover-bg',       'nodeHoverBg',         'string'],
+	['--ct-node-hover-bg',       'nodeHoverBg',         'string', '--base-hover-bg'],
 	['--ct-node-hover-border',   'nodeHoverBorder',     'string'],
 
 	['--ct-node-drop-bg',        'nodeDropBg',          'string'],
@@ -166,32 +254,37 @@ const CSS_VAR_MAP: [string, keyof CanvasTheme, 'string' | 'number'][] = [
 	['--ct-node-current-bg',     'nodeCurrentBg',       'string'],
 	['--ct-node-current-border', 'nodeCurrentBorder',   'string'],
 
-	['--ct-chevron-color',       'chevronColor',        'string'],
+	['--ct-chevron-color',       'chevronColor',        'string', '--base-text-color-3'],
 	['--ct-chevron-size',        'chevronSize',         'number'],
+	['--ct-chevron-expanded',    'chevronExpanded',     'string'],
+	['--ct-chevron-collapsed',   'chevronCollapsed',    'string'],
+	['--ct-chevron-font-family', 'chevronFontFamily',   'string'],
+	['--ct-chevron-font-weight', 'chevronFontWeight',   'string'],
+	['--ct-chevron-padding-end',  'chevronPaddingEnd','number'],
 
-	['--ct-badge-text',          'badgeText',           'string'],
+	['--ct-badge-text',          'badgeText',           'string', '--base-text-color-on-accent'],
 	['--ct-badge-height',        'badgeHeight',         'number'],
 	['--ct-badge-font-size',     'badgeFontSize',       'number'],
 
-	['--ct-conn-color',          'connColor',           'string'],
+	['--ct-conn-color',          'connColor',           'string', '--base-text-color-3'],
 	['--ct-conn-width',          'connWidth',           'number'],
 
 	['--ct-minimap-bg',          'minimapBg',           'string'],
-	['--ct-minimap-border',      'minimapBorder',       'string'],
-	['--ct-minimap-viewport',    'minimapViewport',     'string'],
+	['--ct-minimap-border',      'minimapBorder',       'string', '--base-border-color'],
+	['--ct-minimap-viewport',    'minimapViewport',     'string', '--base-accent-color'],
 	['--ct-minimap-width',       'minimapWidth',        'number'],
 	['--ct-minimap-height',      'minimapHeight',       'number'],
 
-	['--ct-grid-color',          'gridColor',           'string'],
+	['--ct-grid-color',          'gridColor',           'string', '--base-border-color'],
 	['--ct-grid-size',           'gridSize',            'number'],
 
-	['--ct-dz-before',           'dzBefore',            'string'],
+	['--ct-dz-before',           'dzBefore',            'string', '--base-success-color'],
 	['--ct-dz-after',            'dzAfter',             'string'],
 	['--ct-dz-child',            'dzChild',             'string'],
 	['--ct-dz-radius',           'dzRadius',            'number'],
 
-	['--ct-ghost-bg',            'ghostBg',             'string'],
-	['--ct-ghost-border',        'ghostBorder',         'string'],
+	['--ct-ghost-bg',            'ghostBg',             'string', '--base-elevated-bg'],
+	['--ct-ghost-border',        'ghostBorder',         'string', '--base-accent-color'],
 	['--ct-ghost-opacity',       'ghostOpacity',        'number'],
 
 	['--ct-tooltip-bg',          'tooltipBg',           'string'],
@@ -207,13 +300,21 @@ const CSS_VAR_MAP: [string, keyof CanvasTheme, 'string' | 'number'][] = [
 /**
  * Read CSS custom properties from an element and return partial theme overrides.
  * Only returns keys that are actually set on the element.
+ *
+ * For each theme key, tries --ct-* first, then --base-* fallback (if mapped).
+ * This lets apps set --base-accent-color once and have it flow into canvas nodes,
+ * connections, minimap, etc. — while still allowing per-component --ct-* overrides.
  */
 export function readCssTheme(el: HTMLElement): Partial<CanvasTheme> {
 	const style = getComputedStyle(el);
 	const partial: Partial<CanvasTheme> = {};
 
-	for (const [varName, key, type] of CSS_VAR_MAP) {
-		const raw = style.getPropertyValue(varName).trim();
+	for (const [varName, key, type, baseVar] of CSS_VAR_MAP) {
+		// Try --ct-* first, then --base-* fallback
+		let raw = style.getPropertyValue(varName).trim();
+		if (!raw && baseVar) {
+			raw = style.getPropertyValue(baseVar).trim();
+		}
 		if (!raw) continue;
 
 		if (type === 'number') {

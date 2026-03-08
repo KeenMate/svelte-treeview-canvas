@@ -2,7 +2,7 @@
 	import { CanvasTree } from '$lib/index.js';
 	import { TreeController } from '@keenmate/svelte-treeview';
 	import type { LTreeNode } from '@keenmate/svelte-treeview';
-	import type { ContextMenuItem, DropPosition } from '@keenmate/svelte-treeview';
+	import type { ContextMenuEntry, DropPosition } from '@keenmate/svelte-treeview';
 	import type { GrowthDirection, ClickBehavior, CanvasLevelConfig, InitialViewport } from '$lib/types.js';
 
 	// ── Types ──────────────────────────────────────────────────────────────
@@ -127,49 +127,49 @@
 		return [...items].sort((a, b) => (a.data?.name || '').localeCompare(b.data?.name || ''));
 	}
 
-	function getCanvasContextMenu(node: LTreeNode<TreeItem>): ContextMenuItem[] {
-		const items: ContextMenuItem[] = [];
+	function getCanvasContextMenu(node: LTreeNode<TreeItem>): ContextMenuEntry[] {
+		const items: ContextMenuEntry[] = [];
 
 		items.push({
 			icon: '\u{1F3AF}',
-			title: 'Focus on node',
-			callback: () => {
+			label: 'Focus on node',
+			onclick: () => {
 				canvasTreeRef?.focusOnPath(node.path);
 			}
 		});
 
 		if (node.hasChildren) {
-			items.push({ isDivider: true, title: '', callback: () => {} });
+			items.push({ divider: true });
 			if (node.isExpanded) {
 				items.push({
 					icon: '\u{1F4C1}',
-					title: 'Collapse',
-					callback: () => { ctrlRef?.collapseNodes(node.path); }
+					label: 'Collapse',
+					onclick: () => { ctrlRef?.collapseNodes(node.path); }
 				});
 			} else {
 				items.push({
 					icon: '\u{1F4C2}',
-					title: 'Expand',
-					callback: () => { ctrlRef?.expandNodes(node.path); }
+					label: 'Expand',
+					onclick: () => { ctrlRef?.expandNodes(node.path); }
 				});
 			}
 			items.push({
 				icon: '\u{1F4C2}',
-				title: 'Expand subtree',
-				callback: () => { canvasTreeRef?.expandAll(node.path); }
+				label: 'Expand subtree',
+				onclick: () => { canvasTreeRef?.expandAll(node.path); }
 			});
 			items.push({
 				icon: '\u{1F4C1}',
-				title: 'Collapse subtree',
-				callback: () => { canvasTreeRef?.collapseAll(node.path); }
+				label: 'Collapse subtree',
+				onclick: () => { canvasTreeRef?.collapseAll(node.path); }
 			});
 		}
 
-		items.push({ isDivider: true, title: '', callback: () => {} });
+		items.push({ divider: true });
 		items.push({
 			icon: '\u{1F4CB}',
-			title: 'Copy path',
-			callback: () => navigator.clipboard.writeText(node.path)
+			label: 'Copy path',
+			onclick: () => navigator.clipboard.writeText(node.path)
 		});
 
 		return items;
@@ -546,7 +546,7 @@
 					bind:maxGridCols
 					bind:gridNodeMaxW
 					{levelConfig}
-					getNodeLabel={(node) => node.data?.name || node.path}
+					getNodeLabelCallback={(node) => node.data?.name || node.path}
 					onNodeContextMenu={getCanvasContextMenu}
 					{onNodeDrop}
 				/>
