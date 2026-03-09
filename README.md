@@ -4,14 +4,13 @@ Canvas 2D rendering plugin for [`@keenmate/svelte-treeview`](https://github.com/
 
 This package was originally part of `@keenmate/svelte-treeview` but has been extracted into its own package to separate concerns — the core package handles tree data, expand/collapse, search, drag & drop logic, while this package provides a high-performance canvas renderer on top of the same core. **You still need `@keenmate/svelte-treeview` installed** — it is a required peer dependency.
 
-## What's New in v1.0.0-rc01
+## What's New in v1.0.0-rc02
 
+- **`onCanvasContextMenu` prop**: Right-click empty canvas space (no node) for a canvas-level context menu. Returns `ContextMenuEntry[]`, renders the same styled menu without a node header.
 - **Unified Context Menu API**: Shares `ContextMenuEntry` / `ContextMenuDivider` / `ContextMenuItem` types from `@keenmate/svelte-treeview`. Full support for icons, keyboard shortcuts, nested submenus, named dividers, `isVisible`, `isDisabled`, `className="danger"`, and async `onclick`.
-- **Context menu keyboard shortcuts**: When the menu is open, pressing a shortcut key (e.g. `V`, `Ctrl+C`) triggers the matching item. Escape closes the menu.
-- **Context Menu example page**: Interactive demo at `/examples/context-menu` with 7 presets showcasing all menu features.
-- **`nodeMaxWidth` prop**: Caps node width with ellipsis truncation. Available as prop, CSS variable (`--ct-node-max-width`), or theme property.
-- **`truncateText()` utility**: Exported helper for custom render callbacks — binary-search ellipsis truncation.
-- **`chevronFontWeight` / `chevronPaddingEnd` theme properties**: Support for icon fonts (e.g. Font Awesome) and configurable chevron positioning.
+- **Context menu keyboard shortcuts**: When either menu is open, pressing a shortcut key (e.g. `V`, `Ctrl+C`) triggers the matching item. Escape closes the menu.
+- **Submenu alignment fix**: Submenus now align with their parent item instead of the menu top edge.
+- **Context Menu example page**: Interactive demo at `/examples/context-menu` with 7 presets showcasing all menu features, plus canvas-level menu demo.
 
 ## Installation
 

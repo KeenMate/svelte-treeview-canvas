@@ -139,6 +139,7 @@
 		onNodeClick?: (node: LTreeNode<T>) => void;
 		onNodeDrop?: (source: LTreeNode<T>, target: LTreeNode<T>, position: DropPosition) => void;
 		onNodeContextMenu?: (node: LTreeNode<T>) => ContextMenuEntry[];
+		onCanvasContextMenu?: () => ContextMenuEntry[];
 
 		// Metrics (bindable, readonly)
 		layoutTime?: number;
@@ -234,6 +235,7 @@
 		onNodeClick: onNodeClickCb,
 		onNodeDrop: onNodeDropCb,
 		onNodeContextMenu: onNodeContextMenuCb,
+		onCanvasContextMenu: onCanvasContextMenuCb,
 
 		// Metrics
 		layoutTime = $bindable(0),
@@ -258,6 +260,12 @@
 	let tooltipLn = $state<LayoutNode<T> | null>(null);
 	let tooltipX = $state(0);
 	let tooltipY = $state(0);
+
+	/** Canvas-level context menu state (right-click on empty space) */
+	let canvasMenuVisible = $state(false);
+	let canvasMenuX = $state(0);
+	let canvasMenuY = $state(0);
+	let canvasMenuEntries = $state<ContextMenuEntry[]>([]);
 
 	// Layout data (non-reactive for performance)
 	let layoutNodes: LayoutNode<T>[] = [];
@@ -716,13 +724,25 @@
 				}
 			},
 			onContextMenu: (ln, clientX, clientY) => {
+				canvasMenuVisible = false;
 				if (ctrlRef && onNodeContextMenuCb) {
 					ctrlRef.contextMenuCallbackCb = (node, close) => onNodeContextMenuCb!(node);
 					ctrlRef.openContextMenu(ln.node, clientX, clientY);
 				}
 			},
+			onCanvasContextMenu: (clientX, clientY) => {
+				if (onCanvasContextMenuCb) {
+					canvasMenuEntries = onCanvasContextMenuCb();
+					if (canvasMenuEntries.length > 0) {
+						canvasMenuX = clientX;
+						canvasMenuY = clientY;
+						canvasMenuVisible = true;
+					}
+				}
+			},
 			onCloseContextMenu: () => {
 				ctrlRef?.closeContextMenu();
+				canvasMenuVisible = false;
 			},
 			onHoverChange: (_ln) => {
 				// Redraw is handled by interaction manager
@@ -960,13 +980,13 @@
 		// Don't handle keys when focus is in input fields
 		if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
 
+		// Handle node context menu shortcuts
 		if (ctrlRef?.contextMenuVisible) {
 			if (e.key === 'Escape') {
 				ctrlRef.closeContextMenu();
 				return;
 			}
 
-			// Match keyboard shortcuts against context menu entries
 			if (ctrlRef.contextMenuNode && onNodeContextMenuCb) {
 				const entries = onNodeContextMenuCb(ctrlRef.contextMenuNode);
 				const match = findEntryByShortcut(entries, e);
@@ -980,6 +1000,26 @@
 					ctrlRef.closeContextMenu();
 					return;
 				}
+			}
+		}
+
+		// Handle canvas context menu shortcuts
+		if (canvasMenuVisible) {
+			if (e.key === 'Escape') {
+				canvasMenuVisible = false;
+				return;
+			}
+
+			const match = findEntryByShortcut(canvasMenuEntries, e);
+			if (match && !('divider' in match) && match.onclick) {
+				e.preventDefault();
+				try {
+					match.onclick();
+				} catch (error) {
+					console.error('Canvas context menu shortcut error:', error);
+				}
+				canvasMenuVisible = false;
+				return;
 			}
 		}
 
@@ -1667,7 +1707,7 @@
 			></canvas>
 		</div>
 
-		{#if tooltipLn && !ctrl.contextMenuVisible}
+		{#if tooltipLn && !ctrl.contextMenuVisible && !canvasMenuVisible}
 			<div class="canvas-tree-tooltip" style="position: fixed; left: {tooltipX}px; top: {tooltipY}px;">
 				{#if tooltipSnippet}
 					{@render tooltipSnippet(tooltipLn.node, getLabel(tooltipLn.node))}
@@ -1681,57 +1721,66 @@
 			</div>
 		{/if}
 
+		{#snippet renderCanvasEntries(entries: ContextMenuEntry[], closeFn: () => void)}
+			{#each entries as entry}
+				{#if 'divider' in entry}
+					<div class="canvas-tree-ctx-menu-divider" role="separator">
+						{#if entry.label}
+							<span class="canvas-tree-ctx-menu-divider-label">{entry.label}</span>
+						{/if}
+					</div>
+				{:else if entry.isVisible !== false}
+					{@const hasChildren = entry.children && entry.children.length > 0}
+					<div class="canvas-tree-ctx-menu-item-wrapper">
+					<button
+						class="canvas-tree-ctx-menu-item {entry.className || ''}"
+						class:disabled={entry.isDisabled}
+						class:has-children={hasChildren}
+						disabled={entry.isDisabled}
+						role="menuitem"
+						onclick={async () => {
+							if (!hasChildren) {
+								try {
+									await entry.onclick?.();
+								} catch (error) {
+									console.error('Context menu callback error:', error);
+								}
+								closeFn();
+							}
+						}}
+					>
+						{#if entry.icon}
+							<span class="canvas-tree-ctx-menu-icon">{entry.icon}</span>
+						{/if}
+						<span class="canvas-tree-ctx-menu-label">{entry.label}</span>
+						{#if entry.shortcut}
+							<span class="canvas-tree-ctx-menu-shortcut">{entry.shortcut}</span>
+						{/if}
+						{#if hasChildren}
+							<span class="canvas-tree-ctx-menu-arrow">&#x25B8;</span>
+						{/if}
+					</button>
+					{#if hasChildren}
+						<div class="canvas-tree-ctx-submenu" role="menu">
+							{@render renderCanvasEntries(entry.children!, closeFn)}
+						</div>
+					{/if}
+					</div>
+				{/if}
+			{/each}
+		{/snippet}
+
 		{#if ctrl.contextMenuVisible && ctrl.contextMenuNode}
 			{@const menuEntries = ctrl.contextMenuCallbackCb?.(ctrl.contextMenuNode, ctrl.closeContextMenu.bind(ctrl)) || []}
 			<div class="canvas-tree-ctx-menu" style="position: fixed; left: {ctrl.contextMenuX}px; top: {ctrl.contextMenuY}px;" role="menu">
 				<div class="canvas-tree-ctx-menu-header">{getLabel(ctrl.contextMenuNode as LTreeNode<T>)}</div>
-				{#snippet renderCanvasEntries(entries: ContextMenuEntry[])}
-					{#each entries as entry}
-						{#if 'divider' in entry}
-							<div class="canvas-tree-ctx-menu-divider" role="separator">
-								{#if entry.label}
-									<span class="canvas-tree-ctx-menu-divider-label">{entry.label}</span>
-								{/if}
-							</div>
-						{:else if entry.isVisible !== false}
-							{@const hasChildren = entry.children && entry.children.length > 0}
-							<button
-								class="canvas-tree-ctx-menu-item {entry.className || ''}"
-								class:disabled={entry.isDisabled}
-								class:has-children={hasChildren}
-								disabled={entry.isDisabled}
-								role="menuitem"
-								onclick={async () => {
-									if (!hasChildren) {
-										try {
-											await entry.onclick?.();
-										} catch (error) {
-											console.error('Context menu callback error:', error);
-										}
-										ctrl.closeContextMenu();
-									}
-								}}
-							>
-								{#if entry.icon}
-									<span class="canvas-tree-ctx-menu-icon">{entry.icon}</span>
-								{/if}
-								<span class="canvas-tree-ctx-menu-label">{entry.label}</span>
-								{#if entry.shortcut}
-									<span class="canvas-tree-ctx-menu-shortcut">{entry.shortcut}</span>
-								{/if}
-								{#if hasChildren}
-									<span class="canvas-tree-ctx-menu-arrow">&#x25B8;</span>
-								{/if}
-							</button>
-							{#if hasChildren}
-								<div class="canvas-tree-ctx-submenu" role="menu">
-									{@render renderCanvasEntries(entry.children!)}
-								</div>
-							{/if}
-						{/if}
-					{/each}
-				{/snippet}
-				{@render renderCanvasEntries(menuEntries)}
+				{@render renderCanvasEntries(menuEntries, ctrl.closeContextMenu.bind(ctrl))}
+			</div>
+		{/if}
+
+		{#if canvasMenuVisible && canvasMenuEntries.length > 0}
+			<div class="canvas-tree-ctx-menu" style="position: fixed; left: {canvasMenuX}px; top: {canvasMenuY}px;" role="menu">
+				{@render renderCanvasEntries(canvasMenuEntries, () => { canvasMenuVisible = false; })}
 			</div>
 		{/if}
 	{/snippet}
@@ -1891,6 +1940,10 @@
 		letter-spacing: 0.05em;
 	}
 
+	.canvas-tree-ctx-menu-item-wrapper {
+		position: relative;
+	}
+
 	.canvas-tree-ctx-submenu {
 		position: absolute;
 		left: 100%;
@@ -1904,11 +1957,7 @@
 		display: none;
 	}
 
-	.canvas-tree-ctx-menu-item.has-children:hover + .canvas-tree-ctx-submenu {
-		display: block;
-	}
-
-	.canvas-tree-ctx-submenu:hover {
+	.canvas-tree-ctx-menu-item-wrapper:hover > .canvas-tree-ctx-submenu {
 		display: block;
 	}
 </style>

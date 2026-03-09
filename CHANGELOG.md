@@ -7,12 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-## [1.0.0-rc01] - 2026-03-08
+## [1.0.0-rc02] - 2026-03-09
 
 ### Added
 - **Unified Context Menu types**: Uses shared `ContextMenuEntry` / `ContextMenuDivider` / `ContextMenuItem` from `@keenmate/svelte-treeview`. Supports icons, keyboard shortcut hints, submenus (nested `children`), named dividers, `isVisible`, `isDisabled`, `className` (e.g. `"danger"`), and async `onclick`.
 - **Context menu keyboard shortcuts**: When the context menu is open, pressing a shortcut key (e.g. `V`, `Ctrl+C`) triggers the matching item's `onclick`. Supports modifier keys (Ctrl, Shift, Alt). Escape closes the menu.
 - **Context Menu example page** (`/examples/context-menu`): Interactive demo with 7 preset configurations (basic, icons+shortcuts, submenus, dividers, disabled/hidden, danger, full). Event log panel shows triggered actions.
+- **`onCanvasContextMenu` prop**: Right-click on empty canvas space (no node) triggers a canvas-level context menu. Callback signature: `() => ContextMenuEntry[]`. Renders the same menu UI without the node header. Keyboard shortcuts work for canvas menu too.
+
+### Fixed
+- **Submenu aligned to top of menu instead of parent item**: Submenus (`children`) were positioned relative to the menu container, appearing at the top edge. Wrapped each item + submenu in a `position: relative` container so the submenu aligns with its parent item.
+
+## [1.0.0-rc01] - 2026-03-08
+
+### Added
 - **`nodeMaxWidth` prop**: Caps node width so long labels get ellipsis-truncated instead of stretching indefinitely. Default `0` (unlimited). Also available as `--ct-node-max-width` CSS variable and in `CanvasTheme`.
 - **`truncateText()` utility**: Exported helper for custom `renderBodyCallback` implementations — binary-search ellipsis truncation on a canvas context.
 - **Ellipsis truncation in `defaultRenderBody`**: Text that exceeds available node width is now truncated with `…` instead of browser squish-to-fit.

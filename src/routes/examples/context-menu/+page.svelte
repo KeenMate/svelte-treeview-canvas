@@ -218,6 +218,16 @@
 			case 'full': return getFullMenu(node);
 		}
 	}
+
+	function getCanvasContextMenu(): ContextMenuEntry[] {
+		return [
+			{ icon: '🌲', label: 'Expand All', shortcut: 'E', onclick: () => { ctrlRef?.expandAll(); log('Expand all'); } },
+			{ icon: '📁', label: 'Collapse All', shortcut: 'C', onclick: () => { ctrlRef?.collapseAll(); log('Collapse all'); } },
+			{ divider: true },
+			{ icon: '🔢', label: `${treeData.length} nodes loaded`, isDisabled: true, onclick: () => {} },
+			{ icon: '📊', label: `Preset: ${activePreset}`, isDisabled: true, onclick: () => {} },
+		];
+	}
 </script>
 
 <svelte:head>
@@ -229,7 +239,7 @@
 	<header>
 		<a href="/" class="back-link">&larr; Back to Examples</a>
 		<h1>Context Menu</h1>
-		<p class="subtitle">Right-click any node to see the context menu. Switch presets to explore different <code>ContextMenuEntry</code> features.</p>
+		<p class="subtitle">Right-click any node to see the node context menu, or right-click empty canvas space for the canvas menu. Switch presets to explore different <code>ContextMenuEntry</code> features.</p>
 	</header>
 
 	<!-- Preset selector -->
@@ -299,6 +309,7 @@
 				bind:controller={ctrlRef}
 				getNodeLabelCallback={(node) => node.data?.name || node.path}
 				onNodeContextMenu={getContextMenu}
+				onCanvasContextMenu={getCanvasContextMenu}
 			/>
 		</div>
 	</div>

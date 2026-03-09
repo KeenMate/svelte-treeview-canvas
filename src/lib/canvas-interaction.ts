@@ -22,6 +22,7 @@ export interface InteractionCallbacks<T> {
 	onNodeClick: (ln: LayoutNode<T>, chevronHit: boolean) => void;
 	onDragDrop: (src: LayoutNode<T>, target: LayoutNode<T>, position: DropPosition) => void;
 	onContextMenu: (ln: LayoutNode<T>, clientX: number, clientY: number) => void;
+	onCanvasContextMenu: (clientX: number, clientY: number) => void;
 	onCloseContextMenu: () => void;
 	onHoverChange: (ln: LayoutNode<T> | null) => void;
 	onSelectionChange: (path: string | null) => void;
@@ -428,6 +429,7 @@ export function createInteractionManager<T>(
 			callbacks.requestRedraw();
 		} else {
 			callbacks.onCloseContextMenu();
+			callbacks.onCanvasContextMenu(e.clientX, e.clientY);
 		}
 	}
 
