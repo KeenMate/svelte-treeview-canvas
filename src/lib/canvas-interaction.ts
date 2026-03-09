@@ -25,7 +25,8 @@ export interface InteractionCallbacks<T> {
 	onCanvasContextMenu: (clientX: number, clientY: number) => void;
 	onCloseContextMenu: () => void;
 	onHoverChange: (ln: LayoutNode<T> | null) => void;
-	onSelectionChange: (path: string | null) => void;
+	onSelectionChange: (path: string | null, modifiers?: { ctrl: boolean; shift: boolean }) => void;
+	onRectangleSelect?: (paths: string[], additive: boolean) => void;
 	getNodeLabel: (ln: LayoutNode<T>) => string;
 	hitTestOverride?: () => ((wx: number, wy: number) => LayoutNode<T> | null) | null;
 	/** Update tooltip position without triggering a full canvas redraw */
@@ -47,6 +48,12 @@ export interface InteractionState {
 	tooltipNode: LayoutNode<any> | null;
 	tooltipScreenX: number;
 	tooltipScreenY: number;
+	// Selection rectangle (shift+drag)
+	isSelecting: boolean;
+	selRectStartX: number;
+	selRectStartY: number;
+	selRectEndX: number;
+	selRectEndY: number;
 }
 
 export function createInteractionManager<T>(
@@ -75,6 +82,13 @@ export function createInteractionManager<T>(
 	let hoveredNode: LayoutNode<T> | null = null;
 	let panClickNode: LayoutNode<T> | null = null;
 	let isMinimapPanning = false;
+
+	// Selection rectangle (shift+drag on empty space)
+	let isSelecting = false;
+	let selRectStartX = 0;
+	let selRectStartY = 0;
+	let selRectEndX = 0;
+	let selRectEndY = 0;
 
 	// Tooltip
 	let tooltipNode: LayoutNode<T> | null = null;
@@ -217,6 +231,13 @@ export function createInteractionManager<T>(
 			dragStartX = mx;
 			dragStartY = my;
 			isDragging = false;
+		} else if (e.shiftKey && !hit) {
+			// Shift+drag on empty space: start selection rectangle
+			isSelecting = true;
+			selRectStartX = wx;
+			selRectStartY = wy;
+			selRectEndX = wx;
+			selRectEndY = wy;
 		} else {
 			// No hit or drag-drop disabled: pan the canvas
 			// Track the hit node so a click (no movement) still fires node selection
@@ -243,6 +264,14 @@ export function createInteractionManager<T>(
 				panX = rect.width / 2 - mmWorld[0] * zoom;
 				panY = rect.height / 2 - mmWorld[1] * zoom;
 			}
+			callbacks.requestRedraw();
+			return;
+		}
+
+		if (isSelecting) {
+			const [wx, wy] = screenToWorld(mx, my);
+			selRectEndX = wx;
+			selRectEndY = wy;
 			callbacks.requestRedraw();
 			return;
 		}
@@ -351,10 +380,36 @@ export function createInteractionManager<T>(
 		const mx = e.clientX - rect.left;
 		const my = e.clientY - rect.top;
 
+		const mods = { ctrl: e.ctrlKey || e.metaKey, shift: e.shiftKey };
+
 		if (isMinimapPanning) {
 			isMinimapPanning = false;
 			return;
 		}
+
+		if (isSelecting) {
+			isSelecting = false;
+			// Compute AABB from selection rect (world coords)
+			const x1 = Math.min(selRectStartX, selRectEndX);
+			const y1 = Math.min(selRectStartY, selRectEndY);
+			const x2 = Math.max(selRectStartX, selRectEndX);
+			const y2 = Math.max(selRectStartY, selRectEndY);
+			// Hit-test all layout nodes against the rectangle
+			const layoutNodes = callbacks.getLayoutNodes();
+			const hitPaths: string[] = [];
+			for (const ln of layoutNodes) {
+				// Check overlap between node bbox and selection rect
+				if (ln.x + ln.w > x1 && ln.x < x2 && ln.y + ln.h > y1 && ln.y < y2) {
+					hitPaths.push(ln.node.path);
+				}
+			}
+			if (hitPaths.length > 0) {
+				callbacks.onRectangleSelect?.(hitPaths, mods.ctrl);
+			}
+			callbacks.requestRedraw();
+			return;
+		}
+
 		if (isPanning) {
 			isPanning = false;
 			const panDist = Math.abs(mx - panStartX) + Math.abs(my - panStartY);
@@ -362,7 +417,7 @@ export function createInteractionManager<T>(
 				// No real pan movement — treat as a click on the node
 				const hit = panClickNode;
 				panClickNode = null;
-				callbacks.onSelectionChange(hit.node.path);
+				callbacks.onSelectionChange(hit.node.path, mods);
 				clearTooltip();
 				callbacks.onCloseContextMenu();
 				const [cwx, cwy] = screenToWorld(mx, my);
@@ -383,7 +438,7 @@ export function createInteractionManager<T>(
 			const [wx, wy] = screenToWorld(mx, my);
 			const hit = hitTest(wx, wy);
 			if (hit) {
-				callbacks.onSelectionChange(hit.node.path);
+				callbacks.onSelectionChange(hit.node.path, mods);
 				clearTooltip();
 				callbacks.onCloseContextMenu();
 
@@ -425,7 +480,9 @@ export function createInteractionManager<T>(
 		const hit = hitTest(wx, wy);
 		if (hit) {
 			callbacks.onContextMenu(hit, e.clientX, e.clientY);
-			callbacks.onSelectionChange(hit.node.path);
+			// Don't clear multi-selection when right-clicking a selected node
+			// (CanvasTree handles this via onSelectionChange modifiers)
+			callbacks.onSelectionChange(hit.node.path, { ctrl: false, shift: false });
 			callbacks.requestRedraw();
 		} else {
 			callbacks.onCloseContextMenu();
@@ -657,7 +714,12 @@ export function createInteractionManager<T>(
 			isPanning,
 			tooltipNode,
 			tooltipScreenX,
-			tooltipScreenY
+			tooltipScreenY,
+			isSelecting,
+			selRectStartX,
+			selRectStartY,
+			selRectEndX,
+			selRectEndY
 		};
 	}
 

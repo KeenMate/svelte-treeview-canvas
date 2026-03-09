@@ -68,6 +68,7 @@
 		treePathSeparator?: string;
 		dragDropMode?: 'none' | 'self' | 'cross' | 'both';
 		shouldUseInternalSearchIndex?: boolean;
+		rangeSelectionMode?: 'visual' | 'logical';
 		isExpandedMember?: string;
 		isDraggableMember?: string;
 		getIsDraggableCallback?: (node: LTreeNode<T>) => boolean;
@@ -133,10 +134,12 @@
 
 		// Bindable state
 		selectedPath?: string | null;
+		selectedPaths?: Set<string>;
 		controller?: TreeController<T> | null;
 
 		// Events
 		onNodeClick?: (node: LTreeNode<T>) => void;
+		onSelectionChanged?: (paths: Set<string>, nodes: LTreeNode<T>[]) => void;
 		onNodeDrop?: (source: LTreeNode<T>, target: LTreeNode<T>, position: DropPosition) => void;
 		onNodeContextMenu?: (node: LTreeNode<T>) => ContextMenuEntry[];
 		onCanvasContextMenu?: () => ContextMenuEntry[];
@@ -172,6 +175,7 @@
 		treePathSeparator,
 		dragDropMode = 'self',
 		shouldUseInternalSearchIndex,
+		rangeSelectionMode = 'visual',
 		isExpandedMember,
 		isDraggableMember,
 		getIsDraggableCallback,
@@ -229,10 +233,12 @@
 
 		// Bindable state
 		selectedPath = $bindable(null),
+		selectedPaths = $bindable(new Set<string>()),
 		controller = $bindable(null),
 
 		// Events
 		onNodeClick: onNodeClickCb,
+		onSelectionChanged: onSelectionChangedCb,
 		onNodeDrop: onNodeDropCb,
 		onNodeContextMenu: onNodeContextMenuCb,
 		onCanvasContextMenu: onCanvasContextMenuCb,
@@ -347,6 +353,16 @@
 	function getBadgeContent(node: LTreeNode<T>): string | null {
 		if (getBadgeContentCallback) return getBadgeContentCallback(node);
 		return defaultBadgeContent(node);
+	}
+
+	function getSelectedNodesFromPaths(paths: Set<string>): LTreeNode<T>[] {
+		if (!ctrlRef) return [];
+		const nodes: LTreeNode<T>[] = [];
+		for (const p of paths) {
+			const n = ctrlRef.getNodeByPath(p);
+			if (n) nodes.push(n);
+		}
+		return nodes;
 	}
 
 	// ── Node Width Measurement ──────────────────────────────────────────
@@ -548,7 +564,7 @@
 				visible++;
 
 				const depthColor = getDepthColor(n.depth);
-				const isSelected = n.node.path === selectedPath;
+				const isSelected = selectedPaths.has(n.node.path) || n.node.path === selectedPath;
 				const isMatch = isSearchActive && matchedPaths.has(n.node.path);
 				const isCurrent = isMatch && currentResultIndex >= 0 && searchResults[currentResultIndex]?.path === n.node.path;
 				const isDragSrc = iState.dragSrcNode?.node.path === n.node.path && iState.isDragging;
@@ -615,7 +631,26 @@
 			ctx.restore();
 		}
 
-		// Minimap
+		// Selection rectangle overlay (shift+drag)
+		if (iState.isSelecting) {
+			ctx.save();
+			ctx.translate(iState.panX, iState.panY);
+			ctx.scale(iState.zoom, iState.zoom);
+			const rx = Math.min(iState.selRectStartX, iState.selRectEndX);
+			const ry = Math.min(iState.selRectStartY, iState.selRectEndY);
+			const rw = Math.abs(iState.selRectEndX - iState.selRectStartX);
+			const rh = Math.abs(iState.selRectEndY - iState.selRectStartY);
+			ctx.fillStyle = theme.selectionRectFill ?? 'rgba(102, 126, 234, 0.1)';
+			ctx.fillRect(rx, ry, rw, rh);
+			ctx.strokeStyle = theme.selectionRectStroke ?? 'rgba(102, 126, 234, 0.5)';
+			ctx.lineWidth = 1 / iState.zoom;
+			ctx.setLineDash([4 / iState.zoom, 4 / iState.zoom]);
+			ctx.strokeRect(rx, ry, rw, rh);
+			ctx.setLineDash([]);
+			ctx.restore();
+		}
+
+		// Minimap — pass selectedPaths for multi-select highlight
 		const tMm0 = performance.now();
 		drawMinimap(
 			ctx, layoutNodes, groupBoxes,
@@ -623,7 +658,8 @@
 			getDepthColor, selectedPath,
 			iState.panX, iState.panY, iState.zoom,
 			cw, ch,
-			theme
+			theme,
+			selectedPaths
 		);
 		const tMm1 = performance.now();
 
@@ -725,6 +761,12 @@
 			},
 			onContextMenu: (ln, clientX, clientY) => {
 				canvasMenuVisible = false;
+				// If right-clicking on an unselected node, clear multi-selection and select it
+				if (!selectedPaths.has(ln.node.path)) {
+					selectedPaths = new Set([ln.node.path]);
+					selectedPath = ln.node.path;
+					onSelectionChangedCb?.(selectedPaths, getSelectedNodesFromPaths(selectedPaths));
+				}
 				if (ctrlRef && onNodeContextMenuCb) {
 					ctrlRef.contextMenuCallbackCb = (node, close) => onNodeContextMenuCb!(node);
 					ctrlRef.openContextMenu(ln.node, clientX, clientY);
@@ -747,8 +789,92 @@
 			onHoverChange: (_ln) => {
 				// Redraw is handled by interaction manager
 			},
-			onSelectionChange: (path) => {
+			onSelectionChange: (path, modifiers) => {
+				if (!path) {
+					// Clicked empty space — deselect all
+					if (ctrlRef) {
+						ctrlRef.deselectAll();
+						selectedPaths = ctrlRef.selectedPaths;
+					} else {
+						selectedPaths = new Set();
+					}
+					selectedPath = null;
+					onSelectionChangedCb?.(selectedPaths, []);
+					return;
+				}
+
+				const ctrl = modifiers?.ctrl ?? false;
+				const shift = modifiers?.shift ?? false;
+
+				if (ctrlRef) {
+					// Route all selection through TreeController so lastSelectedPath stays in sync
+					if (ctrl) {
+						ctrlRef.selectNode(path, 'toggle');
+					} else if (shift) {
+						if (rangeSelectionMode === 'visual' && ctrlRef.lastSelectedPath) {
+							// 2D bounding-box selection using canvas layout positions
+							const anchorPath = ctrlRef.lastSelectedPath;
+							let anchorLn: LayoutNode<T> | null = null;
+							let targetLn: LayoutNode<T> | null = null;
+							for (const ln of layoutNodes) {
+								if (ln.node.path === anchorPath) anchorLn = ln;
+								if (ln.node.path === path) targetLn = ln;
+								if (anchorLn && targetLn) break;
+							}
+							if (anchorLn && targetLn) {
+								// Compute bounding rect from the two nodes
+								const minX = Math.min(anchorLn.x, targetLn.x);
+								const minY = Math.min(anchorLn.y, targetLn.y);
+								const maxX = Math.max(anchorLn.x + anchorLn.w, targetLn.x + targetLn.w);
+								const maxY = Math.max(anchorLn.y + anchorLn.h, targetLn.y + targetLn.h);
+								// Hit-test all layout nodes against the rect
+								const hitPaths: string[] = [];
+								for (const ln of layoutNodes) {
+									if (ln.isVirtual) continue;
+									if (ln.x + ln.w > minX && ln.x < maxX && ln.y + ln.h > minY && ln.y < maxY) {
+										hitPaths.push(ln.node.path);
+									}
+								}
+								console.debug(`[multi-select] Visual 2D range: anchor=${anchorPath}, target=${path}, rect=[${minX.toFixed(0)},${minY.toFixed(0)} → ${maxX.toFixed(0)},${maxY.toFixed(0)}], hit ${hitPaths.length} nodes`);
+								ctrlRef.selectNodes(hitPaths);
+								// Preserve anchor for subsequent shift+clicks
+								ctrlRef.lastSelectedPath = anchorPath;
+							} else {
+								// Fallback: use controller's 1D range
+								ctrlRef.selectNode(path, 'range');
+							}
+						} else {
+							// Logical mode or no anchor: use controller's tree-order range
+							ctrlRef.selectNode(path, 'range');
+						}
+					} else {
+						ctrlRef.selectNode(path, 'replace');
+					}
+					selectedPaths = ctrlRef.selectedPaths;
+				} else {
+					// Fallback without controller
+					if (ctrl) {
+						const newPaths = new Set(selectedPaths);
+						if (newPaths.has(path)) newPaths.delete(path);
+						else newPaths.add(path);
+						selectedPaths = newPaths;
+					} else {
+						selectedPaths = new Set([path]);
+					}
+				}
 				selectedPath = path;
+				onSelectionChangedCb?.(selectedPaths, getSelectedNodesFromPaths(selectedPaths));
+			},
+			onRectangleSelect: (paths, additive) => {
+				if (additive) {
+					const newPaths = new Set(selectedPaths);
+					for (const p of paths) newPaths.add(p);
+					selectedPaths = newPaths;
+				} else {
+					selectedPaths = new Set(paths);
+				}
+				if (paths.length > 0) selectedPath = paths[0];
+				onSelectionChangedCb?.(selectedPaths, getSelectedNodesFromPaths(selectedPaths));
 			},
 			getNodeLabel: (ln) => getLabel(ln.node),
 			onTooltipPositionChange: (_node, x, y) => {
@@ -778,6 +904,13 @@
 	$effect(() => {
 		if (ctrlRef) {
 			controller = ctrlRef;
+		}
+	});
+
+	// Sync rangeSelectionMode prop → controller
+	$effect(() => {
+		if (ctrlRef) {
+			ctrlRef.rangeSelectionMode = rangeSelectionMode ?? 'visual';
 		}
 	});
 
@@ -1326,6 +1459,7 @@
 
 	function navigateToPath(path: string) {
 		selectedPath = path;
+		selectedPaths = new Set([path]);
 		doLayout(); // ensure node is in layout (may have been expanded)
 		interaction.ensurePathVisible(path);
 	}
@@ -1588,6 +1722,7 @@
 		currentResultIndex = ((index % searchResults.length) + searchResults.length) % searchResults.length;
 		const node = searchResults[currentResultIndex];
 		selectedPath = node.path;
+		selectedPaths = new Set([node.path]);
 		if (node.parentPath) {
 			ctrlRef.expandNodes(node.parentPath);
 		}
@@ -1680,6 +1815,7 @@
 	treePathSeparator={treePathSeparator}
 	dragDropMode={dragDropMode}
 	shouldUseInternalSearchIndex={shouldUseInternalSearchIndex}
+	rangeSelectionMode={rangeSelectionMode}
 	isExpandedMember={isExpandedMember}
 	isDraggableMember={isDraggableMember}
 	getIsDraggableCallback={getIsDraggableCallback}

@@ -100,6 +100,8 @@
 	);
 
 	let selectedPath = $state<string | null>(null);
+	let selectedPaths = $state<Set<string>>(new Set());
+	let rangeSelectionMode: 'visual' | 'logical' = $state('visual');
 	let ctrlRef = $state<TreeController<TreeItem> | null>(null);
 
 	// Metrics
@@ -185,6 +187,7 @@
 		treeData = generateTreeData(nodeCountTarget);
 		treeKey++;
 		selectedPath = null;
+		selectedPaths = new Set();
 		dropLog = [];
 		searchQuery = '';
 		searchResults = [];
@@ -347,6 +350,11 @@
 					<option value="expand-and-focus">Expand & Focus</option>
 				</select>
 			</label>
+
+			<span class="orientation-toggle">
+				<button class="btn orient-btn" class:orient-active={rangeSelectionMode === 'visual'} onclick={() => { rangeSelectionMode = 'visual'; console.log('[canvas-dendrogram] Range selection mode set to: visual'); }}>Visual</button>
+				<button class="btn orient-btn" class:orient-active={rangeSelectionMode === 'logical'} onclick={() => { rangeSelectionMode = 'logical'; console.log('[canvas-dendrogram] Range selection mode set to: logical'); }}>Logical</button>
+			</span>
 
 			<label class="group-toggle">
 				Col Gap:
@@ -519,6 +527,8 @@
 					shouldUseInternalSearchIndex={true}
 					searchValueMember="name"
 					bind:selectedPath
+					bind:selectedPaths
+					{rangeSelectionMode}
 					bind:controller={ctrlRef}
 					bind:layoutTime
 					bind:drawTime
@@ -554,7 +564,13 @@
 		{/key}
 
 		<div class="info-row">
-			{#if selectedPath && ctrlRef}
+			{#if selectedPaths.size > 1}
+				<div class="info-panel">
+					<h3>Multi-Selection</h3>
+					<p><strong>{selectedPaths.size} nodes selected</strong> <span class="info-meta">({rangeSelectionMode} mode)</span></p>
+					<button class="btn secondary" style="margin-top: 0.4rem; font-size: 0.8rem; padding: 0.25rem 0.6rem;" onclick={() => { ctrlRef?.deselectAll(); selectedPaths = new Set(); }}>Clear Selection</button>
+				</div>
+			{:else if selectedPath && ctrlRef}
 				{@const selNode = ctrlRef.getNodeByPath(selectedPath)}
 				{#if selNode}
 					<div class="info-panel">

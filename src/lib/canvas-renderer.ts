@@ -750,7 +750,8 @@ export function drawMinimap<T>(
 	zoom: number,
 	cw: number,
 	ch: number,
-	theme: CanvasTheme
+	theme: CanvasTheme,
+	selectedPaths?: Set<string>
 ): void {
 	if (layoutNodes.length === 0 || layoutWidth <= 0 || layoutHeight <= 0) return;
 
@@ -799,7 +800,8 @@ export function drawMinimap<T>(
 		const nw = Math.max(1.5, n.w * mmScale);
 		const nh = Math.max(1, n.h * mmScale);
 		const color = getDepthColor(n.depth);
-		ctx.fillStyle = n.node.path === selectedPath ? theme.minimapViewport : color + '80';
+		const isNodeSelected = n.node.path === selectedPath || (selectedPaths?.has(n.node.path) ?? false);
+		ctx.fillStyle = isNodeSelected ? theme.minimapViewport : color + '80';
 		ctx.fillRect(nx, ny, nw, nh);
 	}
 

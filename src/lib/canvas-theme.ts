@@ -46,6 +46,10 @@ export interface CanvasTheme {
 	nodeSelectedBg: string;
 	nodeSelectedBorder: string;
 
+	// Selection rectangle (shift+drag)
+	selectionRectFill: string;
+	selectionRectStroke: string;
+
 	// Node (hovered)
 	nodeHoverBg: string;
 	nodeHoverBorder: string;
@@ -146,6 +150,9 @@ export const defaultCanvasTheme: CanvasTheme = {
 	nodeSelectedBg: '#f0f4ff',
 	nodeSelectedBorder: '#667eea',
 
+	selectionRectFill: 'rgba(102, 126, 234, 0.1)',
+	selectionRectStroke: 'rgba(102, 126, 234, 0.5)',
+
 	nodeHoverBg: '#fafbff',
 	nodeHoverBorder: '#94a3b8',
 
@@ -242,6 +249,9 @@ const CSS_VAR_MAP: [string, keyof CanvasTheme, 'string' | 'number', string?][] =
 
 	['--ct-node-selected-bg',    'nodeSelectedBg',      'string', '--base-accent-color-light'],
 	['--ct-node-selected-border','nodeSelectedBorder',   'string', '--base-accent-color'],
+
+	['--ct-selection-rect-fill',  'selectionRectFill',  'string'],
+	['--ct-selection-rect-stroke','selectionRectStroke', 'string'],
 
 	['--ct-node-hover-bg',       'nodeHoverBg',         'string', '--base-hover-bg'],
 	['--ct-node-hover-border',   'nodeHoverBorder',     'string'],
