@@ -20,6 +20,7 @@ export interface InteractionCallbacks<T> {
 	getDirection: () => { isV: boolean; isReversed: boolean };
 	requestRedraw: () => void;
 	onNodeClick: (ln: LayoutNode<T>, chevronHit: boolean) => void;
+	onNodeDblClick?: (ln: LayoutNode<T>) => void;
 	onDragDrop: (src: LayoutNode<T>, target: LayoutNode<T>, position: DropPosition) => void;
 	onContextMenu: (ln: LayoutNode<T>, clientX: number, clientY: number) => void;
 	onCanvasContextMenu: (clientX: number, clientY: number) => void;
@@ -468,6 +469,19 @@ export function createInteractionManager<T>(
 		}
 	}
 
+	function onDblClick(e: MouseEvent) {
+		const canvas = callbacks.getCanvas();
+		if (!canvas) return;
+		const rect = canvas.getBoundingClientRect();
+		const mx = e.clientX - rect.left;
+		const my = e.clientY - rect.top;
+		const [wx, wy] = screenToWorld(mx, my);
+		const hit = hitTest(wx, wy);
+		if (hit) {
+			callbacks.onNodeDblClick?.(hit);
+		}
+	}
+
 	function onContextMenu(e: MouseEvent) {
 		e.preventDefault();
 		e.stopPropagation();
@@ -480,9 +494,7 @@ export function createInteractionManager<T>(
 		const hit = hitTest(wx, wy);
 		if (hit) {
 			callbacks.onContextMenu(hit, e.clientX, e.clientY);
-			// Don't clear multi-selection when right-clicking a selected node
-			// (CanvasTree handles this via onSelectionChange modifiers)
-			callbacks.onSelectionChange(hit.node.path, { ctrl: false, shift: false });
+			// Selection is handled inside onContextMenu callback (preserves multi-selection)
 			callbacks.requestRedraw();
 		} else {
 			callbacks.onCloseContextMenu();
@@ -734,6 +746,7 @@ export function createInteractionManager<T>(
 		onMouseMove,
 		onMouseUp,
 		onMouseLeave,
+		onDblClick,
 		onContextMenu,
 		// Methods
 		zoomToFit,

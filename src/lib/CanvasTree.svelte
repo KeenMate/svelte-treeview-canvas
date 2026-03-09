@@ -141,7 +141,7 @@
 		onNodeClick?: (node: LTreeNode<T>) => void;
 		onSelectionChanged?: (paths: Set<string>, nodes: LTreeNode<T>[]) => void;
 		onNodeDrop?: (source: LTreeNode<T>, target: LTreeNode<T>, position: DropPosition) => void;
-		onNodeContextMenu?: (node: LTreeNode<T>) => ContextMenuEntry[];
+		onNodeContextMenu?: (node: LTreeNode<T>, selectedNodes?: LTreeNode<T>[]) => ContextMenuEntry[];
 		onCanvasContextMenu?: () => ContextMenuEntry[];
 
 		// Metrics (bindable, readonly)
@@ -747,6 +747,25 @@
 				}
 				onNodeClickCb?.(ln.node);
 			},
+			onNodeDblClick: (ln) => {
+				// Double-click: toggle expand/collapse (useful in 'select' mode where single click only selects)
+				if (!ctrlRef) return;
+				const nodeCollapsible = ctrlRef.getNodeIsCollapsible(ln.node);
+				if (!collapsible || !nodeCollapsible || !ln.node.hasChildren) return;
+
+				if (ln.node.isExpanded) ctrlRef.collapseNodes(ln.node.path);
+				else ctrlRef.expandNodes(ln.node.path);
+				recomputeAndDraw();
+
+				if (clickBehavior === 'expand-and-focus' || (layoutMode === 'sunburst' && !ln.node.isExpanded)) {
+					// After expand, focus
+					const children = ctrlRef.getChildren(ln.node.path);
+					if (children.length > 0) {
+						const firstChildLn = layoutNodes.find(n => n.node.path === children[0].path);
+						if (firstChildLn) interaction.focusOnNode(firstChildLn, { select: false });
+					}
+				}
+			},
 			onDragDrop: (src, target, position) => {
 				console.log('[CanvasTree] onDragDrop', { src: src.node.path, target: target.node.path, position, hasCtrl: !!ctrlRef });
 				if (ctrlRef) {
@@ -761,14 +780,28 @@
 			},
 			onContextMenu: (ln, clientX, clientY) => {
 				canvasMenuVisible = false;
+				const inSelection = selectedPaths.has(ln.node.path);
+				console.debug(`[CanvasTree] onContextMenu: ${ln.node.path}, inSelection=${inSelection}, selectedCount=${selectedPaths.size}`);
 				// If right-clicking on an unselected node, clear multi-selection and select it
-				if (!selectedPaths.has(ln.node.path)) {
+				// Use direct state manipulation — NOT selectNode() which closes the context menu
+				if (!inSelection) {
+					console.debug(`[CanvasTree] onContextMenu: clearing selection, selecting only ${ln.node.path}`);
+					if (ctrlRef) {
+						ctrlRef.deselectAll();
+						// Directly set selection state without going through _onNodeClicked
+						ln.node.isSelected = true;
+						ctrlRef.selectedPaths = new Set([ln.node.path]);
+						ctrlRef.selectedNode = ln.node;
+						ctrlRef.lastSelectedPath = ln.node.path;
+					}
 					selectedPaths = new Set([ln.node.path]);
 					selectedPath = ln.node.path;
 					onSelectionChangedCb?.(selectedPaths, getSelectedNodesFromPaths(selectedPaths));
+				} else {
+					console.debug(`[CanvasTree] onContextMenu: preserving ${selectedPaths.size} selected nodes`);
 				}
 				if (ctrlRef && onNodeContextMenuCb) {
-					ctrlRef.contextMenuCallbackCb = (node, close) => onNodeContextMenuCb!(node);
+					ctrlRef.contextMenuCallbackCb = (node, close) => onNodeContextMenuCb!(node, ctrlRef!.getSelectedNodes());
 					ctrlRef.openContextMenu(ln.node, clientX, clientY);
 				}
 			},
@@ -1121,7 +1154,7 @@
 			}
 
 			if (ctrlRef.contextMenuNode && onNodeContextMenuCb) {
-				const entries = onNodeContextMenuCb(ctrlRef.contextMenuNode);
+				const entries = onNodeContextMenuCb(ctrlRef.contextMenuNode, ctrlRef.getSelectedNodes());
 				const match = findEntryByShortcut(entries, e);
 				if (match && !('divider' in match) && match.onclick) {
 					e.preventDefault();
@@ -1825,7 +1858,7 @@
 	isCollapsibleMember={isCollapsibleMember}
 	getIsCollapsibleCallback={getIsCollapsibleCallback}
 	orderMember={orderMember}
-	contextMenuCallback={onNodeContextMenuCb}
+	contextMenuCallback={onNodeContextMenuCb ? (node, _close, selectedNodes) => onNodeContextMenuCb(node, selectedNodes) : undefined}
 	contextMenuXOffset={8}
 	contextMenuYOffset={4}
 >
@@ -1839,6 +1872,7 @@
 				onmousemove={interaction.onMouseMove}
 				onmouseup={interaction.onMouseUp}
 				onmouseleave={interaction.onMouseLeave}
+				ondblclick={interaction.onDblClick}
 				oncontextmenu={interaction.onContextMenu}
 			></canvas>
 		</div>
@@ -1908,7 +1942,8 @@
 
 		{#if ctrl.contextMenuVisible && ctrl.contextMenuNode}
 			{@const menuEntries = ctrl.contextMenuCallbackCb?.(ctrl.contextMenuNode, ctrl.closeContextMenu.bind(ctrl)) || []}
-			<div class="canvas-tree-ctx-menu" style="position: fixed; left: {ctrl.contextMenuX}px; top: {ctrl.contextMenuY}px;" role="menu">
+			{@const _log = console.debug(`[CanvasTree] Rendering context menu: node=${ctrl.contextMenuNode.path}, entries=${menuEntries.length}, pos=${ctrl.contextMenuX},${ctrl.contextMenuY}`)}
+			<div class="canvas-tree-ctx-menu" style="position: fixed; left: {ctrl.contextMenuX}px; top: {ctrl.contextMenuY}px; z-index: 10000;" role="menu">
 				<div class="canvas-tree-ctx-menu-header">{getLabel(ctrl.contextMenuNode as LTreeNode<T>)}</div>
 				{@render renderCanvasEntries(menuEntries, ctrl.closeContextMenu.bind(ctrl))}
 			</div>

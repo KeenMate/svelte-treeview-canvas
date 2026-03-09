@@ -52,41 +52,83 @@
 		return nodes;
 	}
 
+	// ── LocalStorage persistence ──────────────────────────────────────────
+	const STORAGE_KEY = 'canvas-dendrogram-config';
+
+	interface StoredConfig {
+		nodeCountTarget: number;
+		growthDirection: GrowthDirection;
+		initialViewport: InitialViewport;
+		groupSiblings: boolean;
+		showDotGrid: boolean;
+		clickBehavior: ClickBehavior;
+		columnGap: number;
+		gridNodeMaxW: number;
+		rangeSelectionMode: 'visual' | 'logical';
+		nodeHeight: number;
+		nodeGap: number;
+		levelSpacingV: number;
+		nodePaddingX: number;
+		nodeMinWidth: number;
+		colorBarW: number;
+		depthColors: string[];
+		fontSize: number;
+		fontFamily: string;
+		zoomLodText: number;
+		zoomLodSimple: number;
+		gridGap: number;
+		groupPadding: number;
+		maxGridCols: number;
+		levelConfigEnabled: boolean[];
+		levelConfigValues: CanvasLevelConfig[];
+		searchMode: 'search' | 'filter';
+	}
+
+	function loadConfig(): Partial<StoredConfig> {
+		try {
+			const raw = localStorage.getItem(STORAGE_KEY);
+			if (raw) return JSON.parse(raw);
+		} catch { /* ignore */ }
+		return {};
+	}
+
+	const saved = loadConfig();
+
 	// ── State ──────────────────────────────────────────────────────────────
-	let nodeCountTarget = $state(5000);
-	let treeData = $state.raw<TreeItem[]>(generateTreeData(5000));
+	let nodeCountTarget = $state(saved.nodeCountTarget ?? 5000);
+	let treeData = $state.raw<TreeItem[]>(generateTreeData(saved.nodeCountTarget ?? 5000));
 	let treeKey = $state(0);
-	let growthDirection: GrowthDirection = $state('right');
-	let initialViewport: InitialViewport = $state('root');
-	let groupSiblings = $state(true);
-	let showDotGrid = $state(false);
+	let growthDirection: GrowthDirection = $state(saved.growthDirection ?? 'right');
+	let initialViewport: InitialViewport = $state(saved.initialViewport ?? 'root');
+	let groupSiblings = $state(saved.groupSiblings ?? true);
+	let showDotGrid = $state(saved.showDotGrid ?? false);
 	let focusPath = $state('1.1');
 
-	let clickBehavior: ClickBehavior = $state('expand');
-	let columnGap = $state(40);
-	let gridNodeMaxW = $state(260);
+	let clickBehavior: ClickBehavior = $state(saved.clickBehavior ?? 'expand');
+	let columnGap = $state(saved.columnGap ?? 40);
+	let gridNodeMaxW = $state(saved.gridNodeMaxW ?? 260);
 	let showAdvancedConfig = $state(false);
 
 	// Visual configuration
-	let nodeHeight = $state(28);
-	let nodeGap = $state(6);
-	let levelSpacingV = $state(60);
-	let nodePaddingX = $state(14);
-	let nodeMinWidth = $state(100);
-	let colorBarW = $state(3);
-	let depthColors = $state(['#f59e0b', '#0d9488', '#7c3aed', '#ec4899']);
-	let fontSize = $state(12);
-	let fontFamily = $state('"SF Mono", "Cascadia Code", "Fira Code", monospace');
-	let zoomLodText = $state(0.35);
-	let zoomLodSimple = $state(0.12);
-	let gridGap = $state(4);
-	let groupPadding = $state(8);
-	let maxGridCols = $state(10);
+	let nodeHeight = $state(saved.nodeHeight ?? 28);
+	let nodeGap = $state(saved.nodeGap ?? 6);
+	let levelSpacingV = $state(saved.levelSpacingV ?? 60);
+	let nodePaddingX = $state(saved.nodePaddingX ?? 14);
+	let nodeMinWidth = $state(saved.nodeMinWidth ?? 100);
+	let colorBarW = $state(saved.colorBarW ?? 3);
+	let depthColors = $state(saved.depthColors ?? ['#f59e0b', '#0d9488', '#7c3aed', '#ec4899']);
+	let fontSize = $state(saved.fontSize ?? 12);
+	let fontFamily = $state(saved.fontFamily ?? '"SF Mono", "Cascadia Code", "Fira Code", monospace');
+	let zoomLodText = $state(saved.zoomLodText ?? 0.35);
+	let zoomLodSimple = $state(saved.zoomLodSimple ?? 0.12);
+	let gridGap = $state(saved.gridGap ?? 4);
+	let groupPadding = $state(saved.groupPadding ?? 8);
+	let maxGridCols = $state(saved.maxGridCols ?? 10);
 
 	// Level overrides
 	let showLevelConfig = $state(false);
-	let levelConfigEnabled = $state([false, false, false, false]);
-	let levelConfigValues = $state<CanvasLevelConfig[]>([
+	let levelConfigEnabled = $state(saved.levelConfigEnabled ?? [false, false, false, false]);
+	let levelConfigValues = $state<CanvasLevelConfig[]>(saved.levelConfigValues ?? [
 		{ color: '#ef4444', nodeHeight: 36, groupSiblings: true, nodeGap: 6 },
 		{ color: '#3b82f6', nodeHeight: 28, groupSiblings: true, nodeGap: 6 },
 		{ color: '#10b981', nodeHeight: 24, groupSiblings: false, nodeGap: 6 },
@@ -101,7 +143,7 @@
 
 	let selectedPath = $state<string | null>(null);
 	let selectedPaths = $state<Set<string>>(new Set());
-	let rangeSelectionMode: 'visual' | 'logical' = $state('visual');
+	let rangeSelectionMode: 'visual' | 'logical' = $state(saved.rangeSelectionMode ?? 'visual');
 	let ctrlRef = $state<TreeController<TreeItem> | null>(null);
 
 	// Metrics
@@ -115,7 +157,7 @@
 
 	// Search & filter
 	type SearchMode = 'search' | 'filter';
-	let searchMode: SearchMode = $state('search');
+	let searchMode: SearchMode = $state(saved.searchMode ?? 'search');
 	let searchQuery = $state('');
 	let searchResults = $state<LTreeNode<TreeItem>[]>([]);
 	let currentResultIndex = $state(-1);
@@ -123,15 +165,71 @@
 	// Canvas tree component reference
 	let canvasTreeRef: ReturnType<typeof CanvasTree> | undefined = $state();
 
+	// ── Persist config to localStorage ────────────────────────────────────
+	$effect(() => {
+		const config: StoredConfig = {
+			nodeCountTarget, growthDirection, initialViewport, groupSiblings,
+			showDotGrid, clickBehavior, columnGap, gridNodeMaxW, rangeSelectionMode,
+			nodeHeight, nodeGap, levelSpacingV, nodePaddingX, nodeMinWidth,
+			colorBarW, depthColors, fontSize, fontFamily, zoomLodText, zoomLodSimple,
+			gridGap, groupPadding, maxGridCols, levelConfigEnabled, levelConfigValues,
+			searchMode,
+		};
+		localStorage.setItem(STORAGE_KEY, JSON.stringify(config));
+	});
+
 	// ── Callbacks ─────────────────────────────────────────────────────────
 
 	function sortCallback(items: LTreeNode<TreeItem>[]) {
 		return [...items].sort((a, b) => (a.data?.name || '').localeCompare(b.data?.name || ''));
 	}
 
-	function getCanvasContextMenu(node: LTreeNode<TreeItem>): ContextMenuEntry[] {
+	function getCanvasContextMenu(node: LTreeNode<TreeItem>, selectedNodes?: LTreeNode<TreeItem>[]): ContextMenuEntry[] {
 		const items: ContextMenuEntry[] = [];
+		const selCount = selectedNodes?.length ?? 0;
+		const isMulti = selCount > 1;
 
+		if (isMulti) {
+			// ── Multi-selection context menu ─────────────────────────────
+			items.push({
+				icon: '\u{1F4E6}',
+				label: `Export ${selCount} nodes as CSV`,
+				onclick: () => {
+					const header = 'id,path,name,level,hasChildren';
+					const rows = (selectedNodes ?? []).map(n =>
+						`${n.data?.id ?? ''},${n.path},"${n.data?.name ?? ''}",${n.level},${n.data?.hasChildren ?? false}`
+					);
+					const csv = [header, ...rows].join('\n');
+					const blob = new Blob([csv], { type: 'text/csv' });
+					const url = URL.createObjectURL(blob);
+					const a = document.createElement('a');
+					a.href = url;
+					a.download = `tree-export-${selCount}-nodes.csv`;
+					a.click();
+					URL.revokeObjectURL(url);
+				}
+			});
+			items.push({
+				icon: '\u{1F4CB}',
+				label: `Copy ${selCount} paths`,
+				onclick: () => {
+					const paths = (selectedNodes ?? []).map(n => n.path).join('\n');
+					navigator.clipboard.writeText(paths);
+				}
+			});
+			items.push({ divider: true });
+			items.push({
+				icon: '\u{274C}',
+				label: 'Clear selection',
+				onclick: () => {
+					ctrlRef?.deselectAll();
+					selectedPaths = new Set();
+				}
+			});
+			return items;
+		}
+
+		// ── Single-node context menu ─────────────────────────────────
 		items.push({
 			icon: '\u{1F3AF}',
 			label: 'Focus on node',
@@ -345,7 +443,7 @@
 			<label class="group-toggle">
 				Click:
 				<select class="click-select" bind:value={clickBehavior}>
-					<option value="select">Select only</option>
+					<option value="select">Select (dbl-click expand)</option>
 					<option value="expand">Expand</option>
 					<option value="expand-and-focus">Expand & Focus</option>
 				</select>
