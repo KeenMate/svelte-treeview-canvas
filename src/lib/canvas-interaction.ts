@@ -24,6 +24,8 @@ export interface InteractionCallbacks<T> {
 	onDragDrop: (src: LayoutNode<T>, target: LayoutNode<T>, position: DropPosition) => void;
 	onContextMenu: (ln: LayoutNode<T>, clientX: number, clientY: number) => void;
 	onCanvasContextMenu: (clientX: number, clientY: number) => void;
+	onGroupContextMenu?: (parentPath: string, clientX: number, clientY: number) => void;
+	getGroupBoxes?: () => import('./types.js').GroupBox[];
 	onCloseContextMenu: () => void;
 	onHoverChange: (ln: LayoutNode<T> | null) => void;
 	onSelectionChange: (path: string | null, modifiers?: { ctrl: boolean; shift: boolean }) => void;
@@ -483,22 +485,38 @@ export function createInteractionManager<T>(
 	}
 
 	function onContextMenu(e: MouseEvent) {
+		console.debug('[canvas-interaction] onContextMenu fired', { button: e.button, clientX: e.clientX, clientY: e.clientY });
 		e.preventDefault();
 		e.stopPropagation();
 		const canvas = callbacks.getCanvas();
-		if (!canvas) return;
+		if (!canvas) { console.debug('[canvas-interaction] onContextMenu: no canvas'); return; }
 		const rect = canvas.getBoundingClientRect();
 		const mx = e.clientX - rect.left;
 		const my = e.clientY - rect.top;
 		const [wx, wy] = screenToWorld(mx, my);
 		const hit = hitTest(wx, wy);
+		console.debug('[canvas-interaction] onContextMenu: hit=', hit?.node.path ?? null);
 		if (hit) {
 			callbacks.onContextMenu(hit, e.clientX, e.clientY);
 			// Selection is handled inside onContextMenu callback (preserves multi-selection)
 			callbacks.requestRedraw();
 		} else {
-			callbacks.onCloseContextMenu();
-			callbacks.onCanvasContextMenu(e.clientX, e.clientY);
+			// Check if we hit a group box
+			const boxes = callbacks.getGroupBoxes?.() ?? [];
+			let groupHit: import('./types.js').GroupBox | null = null;
+			for (const box of boxes) {
+				if (wx >= box.x && wx <= box.x + box.w && wy >= box.y && wy <= box.y + box.h) {
+					groupHit = box;
+					break;
+				}
+			}
+			if (groupHit?.parentPath && callbacks.onGroupContextMenu) {
+				console.debug('[canvas-interaction] onContextMenu: group hit, parentPath=', groupHit.parentPath);
+				callbacks.onGroupContextMenu(groupHit.parentPath, e.clientX, e.clientY);
+			} else {
+				callbacks.onCloseContextMenu();
+				callbacks.onCanvasContextMenu(e.clientX, e.clientY);
+			}
 		}
 	}
 

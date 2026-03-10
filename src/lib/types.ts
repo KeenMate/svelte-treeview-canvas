@@ -47,6 +47,8 @@ export interface GroupBox {
 	connX: number;
 	connY: number;
 	depth: number;
+	/** Path of the parent node that owns this group */
+	parentPath?: string;
 }
 
 /** Result of a layout computation */

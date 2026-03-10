@@ -275,6 +275,124 @@
 		return items;
 	}
 
+	function getGroupContextMenu(parentNode: LTreeNode<TreeItem>, childNodes: LTreeNode<TreeItem>[]): ContextMenuEntry[] {
+		const items: ContextMenuEntry[] = [];
+
+		items.push({
+			icon: '\u{1F4C2}',
+			label: `Expand "${parentNode.data?.name}"`,
+			isDisabled: parentNode.isExpanded,
+			onclick: () => ctrlRef?.expandNodes(parentNode.path)
+		});
+		items.push({
+			icon: '\u{1F4C1}',
+			label: `Collapse "${parentNode.data?.name}"`,
+			isDisabled: !parentNode.isExpanded,
+			onclick: () => ctrlRef?.collapseNodes(parentNode.path)
+		});
+
+		items.push({ divider: true, label: `${childNodes.length} children` });
+
+		items.push({
+			icon: '\u{2705}',
+			label: `Select all ${childNodes.length} children`,
+			onclick: () => {
+				ctrlRef?.selectNodes(childNodes.map(n => n.path));
+				selectedPaths = ctrlRef?.selectedPaths ?? new Set();
+			}
+		});
+		items.push({
+			icon: '\u{1F4E6}',
+			label: `Export group as CSV`,
+			onclick: () => {
+				const header = 'id,path,name,level,hasChildren';
+				const rows = childNodes.map(n =>
+					`${n.data?.id ?? ''},${n.path},"${n.data?.name ?? ''}",${n.level},${n.data?.hasChildren ?? false}`
+				);
+				const csv = [header, ...rows].join('\n');
+				const blob = new Blob([csv], { type: 'text/csv' });
+				const url = URL.createObjectURL(blob);
+				const a = document.createElement('a');
+				a.href = url;
+				a.download = `group-${parentNode.data?.name ?? parentNode.path}.csv`;
+				a.click();
+				URL.revokeObjectURL(url);
+			}
+		});
+		items.push({
+			icon: '\u{1F3AF}',
+			label: 'Focus on parent',
+			onclick: () => canvasTreeRef?.focusOnPath(parentNode.path)
+		});
+
+		return items;
+	}
+
+	function getCanvasEmptyContextMenu(): ContextMenuEntry[] {
+		const items: ContextMenuEntry[] = [];
+
+		items.push({
+			icon: '\u{1F50D}',
+			label: 'Zoom to Fit',
+			shortcut: 'F',
+			onclick: () => canvasTreeRef?.zoomToFit()
+		});
+
+		items.push({ divider: true, label: 'Tree' });
+
+		items.push({
+			icon: '\u{1F4C2}',
+			label: 'Expand All',
+			onclick: () => canvasTreeRef?.expandAll()
+		});
+		items.push({
+			icon: '\u{1F4C1}',
+			label: 'Collapse All',
+			onclick: () => canvasTreeRef?.collapseAll()
+		});
+
+		items.push({ divider: true, label: 'Data' });
+
+		items.push({
+			icon: '\u{1F504}',
+			label: 'Regenerate tree',
+			onclick: () => generateAndReset()
+		});
+
+		if (selectedPaths.size > 0) {
+			items.push({ divider: true, label: `Selection (${selectedPaths.size})` });
+			items.push({
+				icon: '\u{1F4E6}',
+				label: `Export ${selectedPaths.size} nodes as CSV`,
+				onclick: () => {
+					const nodes = ctrlRef?.getSelectedNodes() ?? [];
+					const header = 'id,path,name,level,hasChildren';
+					const rows = nodes.map(n =>
+						`${n.data?.id ?? ''},${n.path},"${n.data?.name ?? ''}",${n.level},${n.data?.hasChildren ?? false}`
+					);
+					const csv = [header, ...rows].join('\n');
+					const blob = new Blob([csv], { type: 'text/csv' });
+					const url = URL.createObjectURL(blob);
+					const a = document.createElement('a');
+					a.href = url;
+					a.download = `tree-export-${nodes.length}-nodes.csv`;
+					a.click();
+					URL.revokeObjectURL(url);
+				}
+			});
+			items.push({
+				icon: '\u{274C}',
+				label: 'Clear selection',
+				onclick: () => {
+					ctrlRef?.deselectAll();
+					selectedPaths = new Set();
+				}
+			});
+		}
+
+		return items;
+	}
+
 	function onNodeDrop(source: LTreeNode<TreeItem>, target: LTreeNode<TreeItem>, position: DropPosition) {
 		dropLog = [`Moved "${source.data?.name}" ${position} "${target.data?.name}"`, ...dropLog.slice(0, 9)];
 	}
@@ -656,6 +774,8 @@
 					{levelConfig}
 					getNodeLabelCallback={(node) => node.data?.name || node.path}
 					onNodeContextMenu={getCanvasContextMenu}
+					onGroupContextMenu={getGroupContextMenu}
+					onCanvasContextMenu={getCanvasEmptyContextMenu}
 					{onNodeDrop}
 				/>
 			</div>

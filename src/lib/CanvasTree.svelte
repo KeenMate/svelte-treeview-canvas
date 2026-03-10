@@ -142,6 +142,7 @@
 		onSelectionChanged?: (paths: Set<string>, nodes: LTreeNode<T>[]) => void;
 		onNodeDrop?: (source: LTreeNode<T>, target: LTreeNode<T>, position: DropPosition) => void;
 		onNodeContextMenu?: (node: LTreeNode<T>, selectedNodes?: LTreeNode<T>[]) => ContextMenuEntry[];
+		onGroupContextMenu?: (parentNode: LTreeNode<T>, childNodes: LTreeNode<T>[]) => ContextMenuEntry[];
 		onCanvasContextMenu?: () => ContextMenuEntry[];
 
 		// Metrics (bindable, readonly)
@@ -241,6 +242,7 @@
 		onSelectionChanged: onSelectionChangedCb,
 		onNodeDrop: onNodeDropCb,
 		onNodeContextMenu: onNodeContextMenuCb,
+		onGroupContextMenu: onGroupContextMenuCb,
 		onCanvasContextMenu: onCanvasContextMenuCb,
 
 		// Metrics
@@ -815,6 +817,19 @@
 					}
 				}
 			},
+			onGroupContextMenu: onGroupContextMenuCb ? (parentPath, clientX, clientY) => {
+				if (!ctrlRef) return;
+				const parentNode = ctrlRef.getNodeByPath(parentPath);
+				if (!parentNode) return;
+				const childNodes = ctrlRef.getChildren(parentPath);
+				canvasMenuEntries = onGroupContextMenuCb!(parentNode, childNodes);
+				if (canvasMenuEntries.length > 0) {
+					canvasMenuX = clientX;
+					canvasMenuY = clientY;
+					canvasMenuVisible = true;
+				}
+			} : undefined,
+			getGroupBoxes: () => groupBoxes,
 			onCloseContextMenu: () => {
 				ctrlRef?.closeContextMenu();
 				canvasMenuVisible = false;

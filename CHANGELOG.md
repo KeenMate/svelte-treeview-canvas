@@ -7,6 +7,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.0.0-rc03] - 2026-03-10
+
+### Added
+- **Multi-select**: Ctrl+click toggles, Shift+click range selects, Shift+drag draws a selection rectangle on the canvas. New `selectedPaths` bindable (`Set<string>`), `onSelectionChanged` event, and `rangeSelectionMode` prop.
+- **Visual vs Logical range selection**: `rangeSelectionMode="visual"` (default) uses 2D bounding-box from the canvas layout positions — only nodes visually between anchor and target are selected. `"logical"` selects all nodes in depth-first tree order (delegates to TreeController).
+- **Selection rectangle**: Shift+drag on empty canvas space draws a dashed rectangle overlay. Nodes inside the rectangle are selected on mouse-up. Hold Ctrl+Shift+drag for additive selection.
+- **Double-click expand**: In `clickBehavior="select"` mode, single click selects (for multi-select workflows) and double-click expands/collapses. Double-click works in all click modes.
+- **4-level context menu system**:
+  - **Node**: Right-click a single node — node-specific actions
+  - **Node selection**: Right-click a node in a multi-selection — bulk actions (e.g. "Export 5 nodes as CSV")
+  - **Group**: Right-click a group box — `onGroupContextMenu(parentNode, childNodes)` callback with group-specific actions (select all children, export group)
+  - **Canvas**: Right-click empty space — `onCanvasContextMenu()` callback for global actions (zoom to fit, expand/collapse all)
+- **`onNodeContextMenu` 2nd parameter**: Now receives `selectedNodes?: LTreeNode<T>[]` for selection-aware menus.
+- **`onGroupContextMenu` prop**: `(parentNode: LTreeNode<T>, childNodes: LTreeNode<T>[]) => ContextMenuEntry[]` — fires when right-clicking a group box.
+- **`GroupBox.parentPath`**: Group boxes now store the path of their parent node for hit-testing.
+- **Selection rectangle theme tokens**: `selectionRectFill` / `selectionRectStroke` in `CanvasTheme`, with CSS variables `--ct-selection-rect-fill` / `--ct-selection-rect-stroke`.
+- **Canvas Dendrogram example**: Visual/Logical range mode toggle, selection count panel, all 4 context menu levels, double-click expand option, localStorage config persistence.
+
 ## [1.0.0-rc02] - 2026-03-09
 
 ### Added

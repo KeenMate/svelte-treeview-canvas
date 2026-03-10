@@ -305,7 +305,8 @@ function computeLayoutGroupedH<T>(
 					h: boxH,
 					connX: boxX,
 					connY: boxY + boxH / 2,
-					depth: childDepth
+					depth: childDepth,
+					parentPath: treeNode.path
 				});
 				ln.connectionTargets!.push({ x: boxX, y: boxY + boxH / 2 });
 				nextY += boxH + childGap;
@@ -451,7 +452,8 @@ function computeLayoutGroupedV<T>(
 					h: boxH,
 					connX: boxX + boxW / 2,
 					connY: boxY,
-					depth: childDepth
+					depth: childDepth,
+					parentPath: treeNode.path
 				});
 				ln.connectionTargets!.push({ x: boxX + boxW / 2, y: boxY });
 				nextX += boxW + childGap;
