@@ -35,6 +35,12 @@
 			description: 'Shared --base-* CSS design tokens that flow into the canvas theme. Presets, priority chain, dark mode.'
 		},
 		{
+			href: '/examples/branch-operations',
+			icon: '🌿',
+			title: 'Branch Operations',
+			description: 'Bulk subtree operations — insertBranch, replaceBranch, deleteBranch — with single emission on canvas.'
+		},
+		{
 			href: '/dev/layout-modes',
 			icon: '🔧',
 			title: 'Layout Modes',
