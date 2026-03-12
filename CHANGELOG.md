@@ -7,33 +7,33 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-## [1.0.0-rc03] - 2026-03-10
+## [1.0.0-rc02] - 2026-03-12
 
 ### Added
 - **Multi-select**: Ctrl+click toggles, Shift+click range selects, Shift+drag draws a selection rectangle on the canvas. New `selectedPaths` bindable (`Set<string>`), `onSelectionChanged` event, and `rangeSelectionMode` prop.
 - **Visual vs Logical range selection**: `rangeSelectionMode="visual"` (default) uses 2D bounding-box from the canvas layout positions — only nodes visually between anchor and target are selected. `"logical"` selects all nodes in depth-first tree order (delegates to TreeController).
 - **Selection rectangle**: Shift+drag on empty canvas space draws a dashed rectangle overlay. Nodes inside the rectangle are selected on mouse-up. Hold Ctrl+Shift+drag for additive selection.
 - **Double-click expand**: In `clickBehavior="select"` mode, single click selects (for multi-select workflows) and double-click expands/collapses. Double-click works in all click modes.
-- **4-level context menu system**:
-  - **Node**: Right-click a single node — node-specific actions
-  - **Node selection**: Right-click a node in a multi-selection — bulk actions (e.g. "Export 5 nodes as CSV")
-  - **Group**: Right-click a group box — `onGroupContextMenu(parentNode, childNodes)` callback with group-specific actions (select all children, export group)
-  - **Canvas**: Right-click empty space — `onCanvasContextMenu()` callback for global actions (zoom to fit, expand/collapse all)
-- **`onNodeContextMenu` 2nd parameter**: Now receives `selectedNodes?: LTreeNode<T>[]` for selection-aware menus.
-- **`onGroupContextMenu` prop**: `(parentNode: LTreeNode<T>, childNodes: LTreeNode<T>[]) => ContextMenuEntry[]` — fires when right-clicking a group box.
-- **`GroupBox.parentPath`**: Group boxes now store the path of their parent node for hit-testing.
-- **Selection rectangle theme tokens**: `selectionRectFill` / `selectionRectStroke` in `CanvasTheme`, with CSS variables `--ct-selection-rect-fill` / `--ct-selection-rect-stroke`.
+- **4-level context menu system**: Node, node-selection, group box (`getGroupContextMenuItemsCallback`), and canvas (`getCanvasContextMenuItemsCallback`). Selection-aware menus via `selectedNodes` parameter.
+- **`autoFocusOnSelect` prop**: When enabled, changing `selectedPath` auto-pans the canvas viewport to the selected node AND scrolls the browser page to the canvas container (using `scrollIntoView({ block: 'nearest' })` — no page jump if already visible).
+- **Spatial keyboard navigation**: Full arrow-key navigation based on node positions. Layout-aware: handles tree, balanced, fishbone, and box modes with correct axis mapping. Includes `Home`/`End` for first/last node, `Backspace` to collapse-and-go-to-parent, `Space`/`Enter` to toggle expand.
+- **`navigationOverrides` prop**: `TreeNavigationOverrides<T>` — override individual nav methods (`navInto`, `navOut`, `navNextSibling`, etc.) while keeping defaults for the rest.
+- **Canvas clipboard integration**: `enableClipboard` prop enables Ctrl+C/X/V keyboard shortcuts. Cut nodes rendered at 40% opacity. `transformDataForPaste` and `onPaste` callbacks for custom paste workflows.
+- **Branch-operations example** (`/examples/branch-operations`): Server-simulated cut/paste with visual cut dimming.
 - **Canvas Dendrogram example**: Visual/Logical range mode toggle, selection count panel, all 4 context menu levels, double-click expand option, localStorage config persistence.
-
-## [1.0.0-rc02] - 2026-03-09
-
-### Added
+- **Org-chart localStorage persistence**: Layout mode, growth direction, theme, compact mode, auto-focus, click behavior, and group peers settings are now persisted across page reloads.
 - **Unified Context Menu types**: Uses shared `ContextMenuEntry` / `ContextMenuDivider` / `ContextMenuItem` from `@keenmate/svelte-treeview`. Supports icons, keyboard shortcut hints, submenus (nested `children`), named dividers, `isVisible`, `isDisabled`, `className` (e.g. `"danger"`), and async `onclick`.
 - **Context menu keyboard shortcuts**: When the context menu is open, pressing a shortcut key (e.g. `V`, `Ctrl+C`) triggers the matching item's `onclick`. Supports modifier keys (Ctrl, Shift, Alt). Escape closes the menu.
 - **Context Menu example page** (`/examples/context-menu`): Interactive demo with 7 preset configurations (basic, icons+shortcuts, submenus, dividers, disabled/hidden, danger, full). Event log panel shows triggered actions.
-- **`onCanvasContextMenu` prop**: Right-click on empty canvas space (no node) triggers a canvas-level context menu. Callback signature: `() => ContextMenuEntry[]`. Renders the same menu UI without the node header. Keyboard shortcuts work for canvas menu too.
+- **`GroupBox.parentPath`**: Group boxes now store the path of their parent node for hit-testing.
+- **Selection rectangle theme tokens**: `selectionRectFill` / `selectionRectStroke` in `CanvasTheme`, with CSS variables `--ct-selection-rect-fill` / `--ct-selection-rect-stroke`.
+
+### Changed
+- **Context menu callback naming**: `onNodeContextMenu` → `getNodeContextMenuItemsCallback`, `onGroupContextMenu` → `getGroupContextMenuItemsCallback`, `onCanvasContextMenu` → `getCanvasContextMenuItemsCallback`. Clearer distinction between events (fire-and-forget `on*`) and data providers (return value `get*Callback`).
+- **`onSelectionChanged` → `onSelectionChange`**: Consistent event naming.
 
 ### Fixed
+- **Balanced layout keyboard navigation**: Left/Right arrow keys were inverted for nodes on the left arm — pressing Left went to parent instead of children. Now correctly resolves direction per-arm.
 - **Submenu aligned to top of menu instead of parent item**: Submenus (`children`) were positioned relative to the menu container, appearing at the top edge. Wrapped each item + submenu in a `position: relative` container so the submenu aligns with its parent item.
 
 ## [1.0.0-rc01] - 2026-03-08

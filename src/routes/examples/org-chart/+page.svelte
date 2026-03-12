@@ -218,13 +218,40 @@
 
 	// ── State ──────────────────────────────────────────────────────────────
 
+	// ── Persist config to localStorage ────────────────────────────────────
+	const STORAGE_KEY = 'org-chart-config';
+
+	interface StoredConfig {
+		layoutMode: LayoutMode;
+		growthDirection: GrowthDirection;
+		initialViewport: InitialViewport;
+		clickBehavior: ClickBehavior;
+		groupSiblings: boolean;
+		compactMode: boolean;
+		autoFocusOnSelect: boolean;
+		activeTheme: ThemeName;
+	}
+
+	type ThemeName = 'default' | 'futuristic';
+
+	function loadConfig(): Partial<StoredConfig> {
+		try {
+			const raw = localStorage.getItem(STORAGE_KEY);
+			if (raw) return JSON.parse(raw);
+		} catch { /* ignore */ }
+		return {};
+	}
+
+	const saved = loadConfig();
+
 	let orgData = $state.raw<Person[]>(generateOrgData());
-	let layoutMode: LayoutMode = $state('tree');
-	let growthDirection: GrowthDirection = $state('right');
-	let initialViewport: InitialViewport = $state('root');
-	let clickBehavior: ClickBehavior = $state('expand-and-focus');
-	let groupSiblings = $state(true);
-	let compactMode = $state(false);
+	let layoutMode: LayoutMode = $state(saved.layoutMode ?? 'tree');
+	let growthDirection: GrowthDirection = $state(saved.growthDirection ?? 'right');
+	let initialViewport: InitialViewport = $state(saved.initialViewport ?? 'root');
+	let clickBehavior: ClickBehavior = $state(saved.clickBehavior ?? 'expand-and-focus');
+	let groupSiblings = $state(saved.groupSiblings ?? true);
+	let compactMode = $state(saved.compactMode ?? false);
+	let autoFocusOnSelect = $state(saved.autoFocusOnSelect ?? false);
 	let selectedPath = $state<string | null>(null);
 	let ctrlRef = $state<TreeController<Person> | null>(null);
 	let canvasTreeRef: ReturnType<typeof CanvasTree> | undefined = $state();
@@ -236,8 +263,15 @@
 	let totalCount = $state(0);
 
 	// Theme
-	type ThemeName = 'default' | 'futuristic';
-	let activeTheme = $state<ThemeName>('default');
+	let activeTheme = $state<ThemeName>(saved.activeTheme ?? 'default');
+
+	$effect(() => {
+		const config: StoredConfig = {
+			layoutMode, growthDirection, initialViewport, clickBehavior,
+			groupSiblings, compactMode, autoFocusOnSelect, activeTheme,
+		};
+		localStorage.setItem(STORAGE_KEY, JSON.stringify(config));
+	});
 
 	const futuristicTheme: Partial<CanvasTheme> = {
 		bg: '#080c14',
@@ -779,6 +813,11 @@
 			</label>
 
 			<label class="group-toggle">
+				<input type="checkbox" bind:checked={autoFocusOnSelect} />
+				Auto-focus
+			</label>
+
+			<label class="group-toggle">
 				Click:
 				<select class="click-select" bind:value={clickBehavior}>
 					<option value="select">Select only</option>
@@ -859,7 +898,8 @@
 				{renderNodeCallback}
 				{measureNodeWidthCallback}
 				getNodeLabelCallback={(node) => node.data?.name || node.path}
-				onNodeContextMenu={getContextMenu}
+				getNodeContextMenuItemsCallback={getContextMenu}
+			{autoFocusOnSelect}
 			/>
 		</div>
 

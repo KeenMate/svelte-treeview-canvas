@@ -1,7 +1,7 @@
 <script lang="ts" generics="T">
 	import { type Snippet, onDestroy } from 'svelte';
 	import { TreeProvider, TreeController, type TreeControllerProps } from '@keenmate/svelte-treeview';
-	import type { LTreeNode, DropPosition, ContextMenuEntry } from '@keenmate/svelte-treeview';
+	import type { LTreeNode, DropPosition, ContextMenuEntry, TreeNavigation, TreeNavigationOverrides } from '@keenmate/svelte-treeview';
 	import type {
 		Orientation,
 		GrowthDirection,
@@ -137,13 +137,15 @@
 		selectedPaths?: Set<string>;
 		controller?: TreeController<T> | null;
 
-		// Events
+		// Events (on* = fire-and-forget)
 		onNodeClick?: (node: LTreeNode<T>) => void;
-		onSelectionChanged?: (paths: Set<string>, nodes: LTreeNode<T>[]) => void;
+		onSelectionChange?: (paths: Set<string>, nodes: LTreeNode<T>[]) => void;
 		onNodeDrop?: (source: LTreeNode<T>, target: LTreeNode<T>, position: DropPosition) => void;
-		onNodeContextMenu?: (node: LTreeNode<T>, selectedNodes?: LTreeNode<T>[]) => ContextMenuEntry[];
-		onGroupContextMenu?: (parentNode: LTreeNode<T>, childNodes: LTreeNode<T>[]) => ContextMenuEntry[];
-		onCanvasContextMenu?: () => ContextMenuEntry[];
+
+		// Data providers (get*Callback = returns data)
+		getNodeContextMenuItemsCallback?: (node: LTreeNode<T>, selectedNodes?: LTreeNode<T>[]) => ContextMenuEntry[];
+		getGroupContextMenuItemsCallback?: (parentNode: LTreeNode<T>, childNodes: LTreeNode<T>[]) => ContextMenuEntry[];
+		getCanvasContextMenuItemsCallback?: () => ContextMenuEntry[];
 
 		// Metrics (bindable, readonly)
 		layoutTime?: number;
@@ -156,6 +158,16 @@
 
 		// Theme overrides (highest priority, over CSS variables and defaults)
 		theme?: Partial<CanvasTheme>;
+
+		// Navigation overrides (partial — override individual nav methods)
+		navigationOverrides?: TreeNavigationOverrides<T>;
+		/** Auto-pan viewport to keep selected node visible when selectedPath changes */
+		autoFocusOnSelect?: boolean;
+
+		// Clipboard support
+		enableClipboard?: boolean;
+		transformDataForPaste?: (data: T, index: number, operation: 'copy' | 'cut') => T;
+		onPaste?: (result: { success: boolean; count: number; error?: string }) => void;
 	}
 
 	let {
@@ -238,12 +250,13 @@
 		controller = $bindable(null),
 
 		// Events
-		onNodeClick: onNodeClickCb,
-		onSelectionChanged: onSelectionChangedCb,
-		onNodeDrop: onNodeDropCb,
-		onNodeContextMenu: onNodeContextMenuCb,
-		onGroupContextMenu: onGroupContextMenuCb,
-		onCanvasContextMenu: onCanvasContextMenuCb,
+		onNodeClick: onNodeClickHandler,
+		onSelectionChange: onSelectionChangeHandler,
+		onNodeDrop: onNodeDropHandler,
+		// Data providers
+		getNodeContextMenuItemsCallback: getNodeContextMenuItemsHandler,
+		getGroupContextMenuItemsCallback: getGroupContextMenuItemsHandler,
+		getCanvasContextMenuItemsCallback: getCanvasContextMenuItemsHandler,
 
 		// Metrics
 		layoutTime = $bindable(0),
@@ -256,6 +269,15 @@
 
 		// Theme overrides
 		theme: themePropOverrides,
+
+		// Navigation
+		navigationOverrides,
+		autoFocusOnSelect = false,
+
+		// Clipboard
+		enableClipboard = false,
+		transformDataForPaste,
+		onPaste: onPasteHandler,
 	}: Props = $props();
 
 	// ── Internal State ──────────────────────────────────────────────────
@@ -573,14 +595,17 @@
 				const isDropTgt = iState.dropTarget?.node.path === n.node.path && iState.isDragging;
 				const isHovered = iState.hoveredNode?.node.path === n.node.path && !iState.isDragging;
 				const isSearchDimmed = isSearchActive && !isMatch;
+				const isCut = ctrlRef ? ctrlRef.cutPaths.has(n.node.path) : false;
 
 				// LOD: simple
 				if (lodSimple) {
+					if (isCut) ctx.globalAlpha = 0.4;
 					drawNodeSimple(ctx, n, depthColor, isSelected, isMatch, isCurrent, isSearchDimmed, theme);
+					if (isCut) ctx.globalAlpha = 1;
 					continue;
 				}
 
-				ctx.globalAlpha = isDragSrc ? 0.3 : isSearchDimmed ? 0.25 : 1;
+				ctx.globalAlpha = isDragSrc ? 0.3 : isCut ? 0.4 : isSearchDimmed ? 0.25 : 1;
 
 				// LOD: medium
 				if (!lodText) {
@@ -747,7 +772,7 @@
 						if (firstChildLn) interaction.focusOnNode(firstChildLn, { select: false });
 					}
 				}
-				onNodeClickCb?.(ln.node);
+				onNodeClickHandler?.(ln.node);
 			},
 			onNodeDblClick: (ln) => {
 				// Double-click: toggle expand/collapse (useful in 'select' mode where single click only selects)
@@ -776,7 +801,7 @@
 					if (result.success) {
 						console.log('[CanvasTree] recomputeAndDraw after move');
 						recomputeAndDraw();
-						onNodeDropCb?.(src.node, target.node, position);
+						onNodeDropHandler?.(src.node, target.node, position);
 					}
 				}
 			},
@@ -798,18 +823,18 @@
 					}
 					selectedPaths = new Set([ln.node.path]);
 					selectedPath = ln.node.path;
-					onSelectionChangedCb?.(selectedPaths, getSelectedNodesFromPaths(selectedPaths));
+					onSelectionChangeHandler?.(selectedPaths, getSelectedNodesFromPaths(selectedPaths));
 				} else {
 					console.debug(`[CanvasTree] onContextMenu: preserving ${selectedPaths.size} selected nodes`);
 				}
-				if (ctrlRef && onNodeContextMenuCb) {
-					ctrlRef.contextMenuCallbackCb = (node, close) => onNodeContextMenuCb!(node, ctrlRef!.getSelectedNodes());
+				if (ctrlRef && getNodeContextMenuItemsHandler) {
+					ctrlRef.getContextMenuItemsHandler = (node, close) => getNodeContextMenuItemsHandler!(node, ctrlRef!.getSelectedNodes());
 					ctrlRef.openContextMenu(ln.node, clientX, clientY);
 				}
 			},
 			onCanvasContextMenu: (clientX, clientY) => {
-				if (onCanvasContextMenuCb) {
-					canvasMenuEntries = onCanvasContextMenuCb();
+				if (getCanvasContextMenuItemsHandler) {
+					canvasMenuEntries = getCanvasContextMenuItemsHandler();
 					if (canvasMenuEntries.length > 0) {
 						canvasMenuX = clientX;
 						canvasMenuY = clientY;
@@ -817,18 +842,18 @@
 					}
 				}
 			},
-			onGroupContextMenu: onGroupContextMenuCb ? (parentPath, clientX, clientY) => {
-				if (!ctrlRef) return;
+			onGroupContextMenu: (parentPath, clientX, clientY) => {
+				if (!ctrlRef || !getGroupContextMenuItemsHandler) return;
 				const parentNode = ctrlRef.getNodeByPath(parentPath);
 				if (!parentNode) return;
 				const childNodes = ctrlRef.getChildren(parentPath);
-				canvasMenuEntries = onGroupContextMenuCb!(parentNode, childNodes);
+				canvasMenuEntries = getGroupContextMenuItemsHandler(parentNode, childNodes);
 				if (canvasMenuEntries.length > 0) {
 					canvasMenuX = clientX;
 					canvasMenuY = clientY;
 					canvasMenuVisible = true;
 				}
-			} : undefined,
+			},
 			getGroupBoxes: () => groupBoxes,
 			onCloseContextMenu: () => {
 				ctrlRef?.closeContextMenu();
@@ -847,7 +872,7 @@
 						selectedPaths = new Set();
 					}
 					selectedPath = null;
-					onSelectionChangedCb?.(selectedPaths, []);
+					onSelectionChangeHandler?.(selectedPaths, []);
 					return;
 				}
 
@@ -911,7 +936,18 @@
 					}
 				}
 				selectedPath = path;
-				onSelectionChangedCb?.(selectedPaths, getSelectedNodesFromPaths(selectedPaths));
+				onSelectionChangeHandler?.(selectedPaths, getSelectedNodesFromPaths(selectedPaths));
+			},
+			onEmptyClick: () => {
+				// Click on empty canvas — deselect all
+				if (ctrlRef) {
+					ctrlRef.deselectAll();
+					selectedPaths = ctrlRef.selectedPaths;
+				} else {
+					selectedPaths = new Set();
+				}
+				selectedPath = null;
+				onSelectionChangeHandler?.(selectedPaths, []);
 			},
 			onRectangleSelect: (paths, additive) => {
 				if (additive) {
@@ -922,7 +958,7 @@
 					selectedPaths = new Set(paths);
 				}
 				if (paths.length > 0) selectedPath = paths[0];
-				onSelectionChangedCb?.(selectedPaths, getSelectedNodesFromPaths(selectedPaths));
+				onSelectionChangeHandler?.(selectedPaths, getSelectedNodesFromPaths(selectedPaths));
 			},
 			getNodeLabel: (ln) => getLabel(ln.node),
 			onTooltipPositionChange: (_node, x, y) => {
@@ -943,9 +979,342 @@
 
 	// ── Controller Capture ──────────────────────────────────────────────
 
+	function createCanvasNavigation(): TreeNavigation<T> {
+		const nav: TreeNavigation<T> = {
+			navTo(path: string) {
+				navigateToPath(path);
+			},
+
+			navNextSibling() {
+				if (!ctrlRef || !selectedPath) return;
+				const currentLn = layoutNodes.find(ln => ln.node.path === selectedPath);
+				if (!currentLn) return;
+				const box = findContainingGroupBox(currentLn);
+
+				if (box) {
+					const groupNodes = getNodesInGroupBox(box);
+					const { axis, forward } = resolveAxis('crossNext');
+					const neighbor = findNearest(currentLn, groupNodes, axis, forward);
+					if (neighbor) { navigateToPath(neighbor.node.path); return; }
+					const outer = findSpatialNeighborAtDepth(currentLn, axis, forward);
+					if (outer) navigateToPath(outer.node.path);
+					return;
+				}
+
+				if (layoutMode === 'balanced') {
+					const rootLn = getBalancedRootLn();
+					if (!rootLn) return;
+					const armDir = getBalancedArmDir(currentLn, rootLn);
+					if (armDir === 'root') return; // no siblings at root
+					const { axis, forward } = resolveAxis('crossNext', armDir);
+					const neighbor = findBalancedCrossNeighbor(currentLn, rootLn.cx, axis, forward);
+					if (neighbor) navigateToPath(neighbor.node.path);
+					return;
+				}
+
+				if (layoutMode === 'fishbone') {
+					fishboneCrossAction(currentLn, 'crossNext');
+					return;
+				}
+
+				// Generic layout
+				const { axis, forward } = resolveAxis('crossNext');
+				const neighbor = findSpatialNeighborAtDepth(currentLn, axis, forward);
+				if (neighbor) navigateToPath(neighbor.node.path);
+			},
+
+			navPrevSibling() {
+				if (!ctrlRef || !selectedPath) return;
+				const currentLn = layoutNodes.find(ln => ln.node.path === selectedPath);
+				if (!currentLn) return;
+				const box = findContainingGroupBox(currentLn);
+
+				if (box) {
+					const groupNodes = getNodesInGroupBox(box);
+					const { axis, forward } = resolveAxis('crossPrev');
+					const neighbor = findNearest(currentLn, groupNodes, axis, forward);
+					if (neighbor) { navigateToPath(neighbor.node.path); return; }
+					const outer = findSpatialNeighborAtDepth(currentLn, axis, forward);
+					if (outer) navigateToPath(outer.node.path);
+					return;
+				}
+
+				if (layoutMode === 'balanced') {
+					const rootLn = getBalancedRootLn();
+					if (!rootLn) return;
+					const armDir = getBalancedArmDir(currentLn, rootLn);
+					if (armDir === 'root') return;
+					const { axis, forward } = resolveAxis('crossPrev', armDir);
+					const neighbor = findBalancedCrossNeighbor(currentLn, rootLn.cx, axis, forward);
+					if (neighbor) navigateToPath(neighbor.node.path);
+					return;
+				}
+
+				if (layoutMode === 'fishbone') {
+					fishboneCrossAction(currentLn, 'crossPrev');
+					return;
+				}
+
+				// Generic layout
+				const { axis, forward } = resolveAxis('crossPrev');
+				const neighbor = findSpatialNeighborAtDepth(currentLn, axis, forward);
+				if (neighbor) navigateToPath(neighbor.node.path);
+			},
+
+			navInto() {
+				if (!ctrlRef || !selectedPath) return;
+				const node = ctrlRef.getNodeByPath(selectedPath);
+				if (!node) return;
+				const currentLn = layoutNodes.find(ln => ln.node.path === node.path);
+				if (!currentLn) return;
+
+				const box = findContainingGroupBox(currentLn);
+				if (box) {
+					const { axis, forward } = resolveAxis('treeForward');
+					const neighbor = findNearest(currentLn, getNodesInGroupBox(box), axis, forward);
+					if (neighbor) navigateToPath(neighbor.node.path);
+					return;
+				}
+
+				if (layoutMode === 'balanced') {
+					const rootLn = getBalancedRootLn();
+					if (!rootLn) return;
+					const armDir = getBalancedArmDir(currentLn, rootLn);
+					if (armDir === 'root') {
+						// Special case: at balanced root, enter right arm by default
+						const rightKids = (currentLn.children || []).filter(c => c.cx > currentLn.cx);
+						if (rightKids.length > 0) {
+							const best = rightKids.reduce((a, b) =>
+								Math.abs(a.cy - currentLn.cy) < Math.abs(b.cy - currentLn.cy) ? a : b
+							);
+							navigateToPath(best.node.path);
+						}
+						return;
+					}
+					// Non-root: standard treeForward within arm
+					if (node.hasChildren && node.isExpanded) {
+						const children = ctrlRef.getChildren(node.path);
+						if (children.length > 0) navigateToPath(children[0].path);
+					}
+					return;
+				}
+
+				if (layoutMode === 'fishbone') {
+					fishboneTreeForward(currentLn);
+					return;
+				}
+
+				// Generic: go to first child if expanded
+				if (node.hasChildren && node.isExpanded) {
+					const children = ctrlRef.getChildren(node.path);
+					if (children.length > 0) navigateToPath(children[0].path);
+				}
+			},
+
+			navOut() {
+				if (!ctrlRef || !selectedPath) return;
+				const node = ctrlRef.getNodeByPath(selectedPath);
+				if (!node || !node.parentPath) return;
+				const currentLn = layoutNodes.find(ln => ln.node.path === node.path);
+				if (!currentLn) return;
+
+				const box = findContainingGroupBox(currentLn);
+				if (box) {
+					const { axis, forward } = resolveAxis('treeBack');
+					const neighbor = findNearest(currentLn, getNodesInGroupBox(box), axis, forward);
+					if (neighbor) { navigateToPath(neighbor.node.path); return; }
+					// At back edge of group → go to parent
+					navigateToPath(node.parentPath);
+					return;
+				}
+
+				if (layoutMode === 'balanced') {
+					navigateToPath(node.parentPath);
+					return;
+				}
+
+				if (layoutMode === 'fishbone') {
+					fishboneTreeBack(currentLn);
+					return;
+				}
+
+				// Generic: go to parent
+				navigateToPath(node.parentPath);
+			},
+
+			navBackOut() {
+				if (!ctrlRef || !selectedPath) return;
+				const node = ctrlRef.getNodeByPath(selectedPath);
+				if (!node || !node.parentPath) return;
+				// Collapse parent and navigate to it
+				ctrlRef.collapseNodes(node.parentPath);
+				navigateToPath(node.parentPath);
+				recomputeAndDraw();
+			},
+
+			navToggle() {
+				if (!ctrlRef || !selectedPath) return;
+				const node = ctrlRef.getNodeByPath(selectedPath);
+				if (!node || !node.hasChildren) return;
+				if (node.isExpanded) {
+					ctrlRef.collapseNodes(selectedPath);
+				} else {
+					ctrlRef.expandNodes(selectedPath);
+				}
+				recomputeAndDraw();
+			},
+
+			navFirst() {
+				if (!ctrlRef) return;
+				// Navigate to first node (shallowest depth, closest to origin)
+				if (layoutNodes.length === 0) return;
+				const rootLn = layoutNodes.find(ln => ln.depth === 0);
+				if (rootLn) {
+					navigateToPath(rootLn.node.path);
+				} else {
+					navigateToPath(layoutNodes[0].node.path);
+				}
+			},
+
+			navLast() {
+				if (!ctrlRef) return;
+				if (layoutNodes.length === 0) return;
+				// Navigate to last visible leaf (furthest from root in layout)
+				const { axis, forward } = resolveAxis('treeForward');
+				const sorted = [...layoutNodes].sort((a, b) => {
+					const aPos = axis === 'x' ? a.cx : a.cy;
+					const bPos = axis === 'x' ? b.cx : b.cy;
+					return forward ? bPos - aPos : aPos - bPos;
+				});
+				navigateToPath(sorted[0].node.path);
+			}
+		};
+
+		return nav;
+	}
+
+	// ── Fishbone navigation helpers (used by createCanvasNavigation) ────
+
+	function fishboneCrossAction(currentLn: LayoutNode<T>, action: 'crossNext' | 'crossPrev') {
+		const isH = !(growthDirection === 'up' || growthDirection === 'down');
+		const spineAxis: 'x' | 'y' = isH ? 'x' : 'y';
+		const branchAxis: 'x' | 'y' = isH ? 'y' : 'x';
+		const rootLn = layoutNodes.find(ln => ln.depth === 0);
+		const rootBranchPos = rootLn ? (branchAxis === 'y' ? rootLn.cy : rootLn.cx) : 0;
+
+		const getSpineAncestor = (ln: LayoutNode<T>): LayoutNode<T> => {
+			let a = ln;
+			while (a.parent && a.depth > 1) a = a.parent;
+			return a;
+		};
+		const getSpineSide = (ln: LayoutNode<T>): 'before' | 'after' => {
+			const coord = branchAxis === 'y' ? ln.cy : ln.cx;
+			const spine = getSpineAncestor(ln);
+			const spineCoord = branchAxis === 'y' ? spine.cy : spine.cx;
+			return coord < spineCoord ? 'before' : 'after';
+		};
+
+		if (currentLn.depth === 0) return; // root has no cross neighbors
+
+		if (currentLn.depth === 1) {
+			// Spine node: forward/backward among same-side spine siblings
+			const myBranchPos = branchAxis === 'y' ? currentLn.cy : currentLn.cx;
+			const mySpineSide = myBranchPos < rootBranchPos ? 'before' : 'after';
+			const allSpine = layoutNodes.filter(ln => ln.depth === 1);
+			const forward = action === 'crossNext';
+			const mySpinePos = spineAxis === 'x' ? currentLn.cx : currentLn.cy;
+			const sameSide = allSpine.filter(ln => {
+				const lnBranchPos = branchAxis === 'y' ? ln.cy : ln.cx;
+				const lnSide = lnBranchPos < rootBranchPos ? 'before' : 'after';
+				return lnSide === mySpineSide;
+			});
+			const inDir = sameSide.filter(ln => {
+				if (ln.node.path === currentLn.node.path) return false;
+				const lnPos = spineAxis === 'x' ? ln.cx : ln.cy;
+				return forward ? lnPos > mySpinePos + 1 : lnPos < mySpinePos - 1;
+			});
+			inDir.sort((a, b) => {
+				const aPos = spineAxis === 'x' ? a.cx : a.cy;
+				const bPos = spineAxis === 'x' ? b.cx : b.cy;
+				return forward ? aPos - bPos : bPos - aPos;
+			});
+			const neighbor = inDir[0] ?? null;
+			if (neighbor) {
+				navigateToPath(neighbor.node.path);
+			} else if (!forward && currentLn.parent) {
+				navigateToPath(currentLn.parent.node.path);
+			}
+		} else {
+			// Branch node: same-side siblings at same depth across spine branches
+			const mySide = getSpineSide(currentLn);
+			const forward = action === 'crossNext';
+			const sameSideSiblings = layoutNodes.filter(ln =>
+				ln.depth === currentLn.depth && getSpineSide(ln) === mySide
+			);
+			const neighbor = findNearest(currentLn, sameSideSiblings, spineAxis, forward);
+			if (neighbor) {
+				navigateToPath(neighbor.node.path);
+			} else if (!forward) {
+				const spineAnc = getSpineAncestor(currentLn);
+				navigateToPath(spineAnc.node.path);
+			}
+		}
+	}
+
+	function fishboneTreeForward(currentLn: LayoutNode<T>) {
+		if (!ctrlRef) return;
+		const isH = !(growthDirection === 'up' || growthDirection === 'down');
+		const branchAxis: 'x' | 'y' = isH ? 'y' : 'x';
+
+		if (currentLn.depth === 0) {
+			// Root: enter spine
+			const kids = currentLn.children || [];
+			if (kids.length > 0) {
+				const best = kids.reduce((a, b) => {
+					const da = (a.cx - currentLn.cx) ** 2 + (a.cy - currentLn.cy) ** 2;
+					const db = (b.cx - currentLn.cx) ** 2 + (b.cy - currentLn.cy) ** 2;
+					return da < db ? a : b;
+				});
+				navigateToPath(best.node.path);
+			}
+		} else if (currentLn.depth === 1) {
+			// Spine: enter branch children (nearest child in either direction)
+			const children = currentLn.children || [];
+			if (children.length > 0) {
+				const spineAxis: 'x' | 'y' = isH ? 'x' : 'y';
+				const best = children.reduce((a, b) => {
+					const da = Math.abs((spineAxis === 'x' ? a.cx : a.cy) - (spineAxis === 'x' ? currentLn.cx : currentLn.cy));
+					const db = Math.abs((spineAxis === 'x' ? b.cx : b.cy) - (spineAxis === 'x' ? currentLn.cx : currentLn.cy));
+					return da < db ? a : b;
+				});
+				navigateToPath(best.node.path);
+			}
+		} else {
+			// Branch: go to children if expanded
+			const node = ctrlRef.getNodeByPath(currentLn.node.path);
+			if (node && node.hasChildren && node.isExpanded) {
+				const children = ctrlRef.getChildren(node.path);
+				if (children.length > 0) navigateToPath(children[0].path);
+			}
+		}
+	}
+
+	function fishboneTreeBack(currentLn: LayoutNode<T>) {
+		if (currentLn.parent) {
+			navigateToPath(currentLn.parent.node.path);
+		}
+	}
+
 	function captureCtrl(ctrl: TreeController<T>) {
 		// Only set the non-reactive internal ref here (called from template)
 		ctrlRef = ctrl;
+		// Install canvas spatial navigation on the controller
+		const canvasNav = createCanvasNavigation();
+		if (navigationOverrides) {
+			ctrl.navigation = { ...canvasNav, ...navigationOverrides };
+		} else {
+			ctrl.navigation = canvasNav;
+		}
 	}
 
 	// Sync the bindable controller prop via $effect (safe for reactive state)
@@ -1168,8 +1537,8 @@
 				return;
 			}
 
-			if (ctrlRef.contextMenuNode && onNodeContextMenuCb) {
-				const entries = onNodeContextMenuCb(ctrlRef.contextMenuNode, ctrlRef.getSelectedNodes());
+			if (ctrlRef.contextMenuNode && getNodeContextMenuItemsHandler) {
+				const entries = getNodeContextMenuItemsHandler(ctrlRef.contextMenuNode, ctrlRef.getSelectedNodes());
 				const match = findEntryByShortcut(entries, e);
 				if (match && !('divider' in match) && match.onclick) {
 					e.preventDefault();
@@ -1204,70 +1573,72 @@
 			}
 		}
 
+		// Clipboard shortcuts (Ctrl+C/X/V, Escape to cancel cut)
+		if (enableClipboard && ctrlRef && !ctrlRef.contextMenuVisible && !canvasMenuVisible) {
+			if (e.ctrlKey && e.key === 'c') {
+				ctrlRef.copyNodes();
+				e.preventDefault();
+				return;
+			}
+			if (e.ctrlKey && e.key === 'x') {
+				ctrlRef.cutNodes();
+				requestRedraw();
+				e.preventDefault();
+				return;
+			}
+			if (e.ctrlKey && e.key === 'v' && transformDataForPaste) {
+				// selectedPath = paste as child; no selection = paste as root
+				const result = ctrlRef.pasteNodes(selectedPath ?? '', transformDataForPaste, 'child');
+				onPasteHandler?.(result);
+				requestRedraw();
+				e.preventDefault();
+				return;
+			}
+			if (e.key === 'Escape' && ctrlRef.getClipboardOperation() === 'cut') {
+				ctrlRef.cancelCut();
+				requestRedraw();
+				e.preventDefault();
+				return;
+			}
+		}
+
 		if (!ctrlRef || !selectedPath) return;
 
-		const node = ctrlRef.getNodeByPath(selectedPath);
-		if (!node) return;
-
-		// Enter: toggle expand/collapse
-		if (e.key === 'Enter') {
-			if (!node.hasChildren) return;
+		// Enter/Space: toggle expand/collapse
+		if (e.key === 'Enter' || e.key === ' ') {
 			e.preventDefault();
-			if (node.isExpanded) {
-				ctrlRef.collapseNodes(selectedPath);
-			} else {
-				ctrlRef.expandNodes(selectedPath);
-			}
-			recomputeAndDraw();
+			ctrlRef.navToggle();
+			return;
+		}
+		// Home: select first node
+		if (e.key === 'Home') {
+			e.preventDefault();
+			ctrlRef.navFirst();
+			return;
+		}
+		// End: select last node
+		if (e.key === 'End') {
+			e.preventDefault();
+			ctrlRef.navLast();
+			return;
+		}
+		// Backspace: collapse parent + select it
+		if (e.key === 'Backspace') {
+			e.preventDefault();
+			ctrlRef.navBackOut();
 			return;
 		}
 
-		const action = resolveNavAction(e.key);
-		if (!action) return;
-		e.preventDefault();
-
-		const currentLn = layoutNodes.find(ln => ln.node.path === node.path);
-		if (!currentLn) return;
-		const box = findContainingGroupBox(currentLn);
-
-		if (box) {
-			// ── Inside a group box: navigate like Excel within the grid ──
-			const groupNodes = getNodesInGroupBox(box);
-			const { axis, forward } = resolveAxis(action);
-
-			if (action === 'crossPrev' || action === 'crossNext') {
-				const neighbor = findNearest(currentLn, groupNodes, axis, forward);
-				if (neighbor) {
-					navigateToPath(neighbor.node.path);
-				} else {
-					// At edge of group — escape to nearest same-depth node outside
-					const outer = findSpatialNeighborAtDepth(currentLn, axis, forward);
-					if (outer) navigateToPath(outer.node.path);
-				}
-			} else if (action === 'treeForward') {
-				const neighbor = findNearest(currentLn, groupNodes, axis, forward);
-				if (neighbor) navigateToPath(neighbor.node.path);
-				// At forward edge of group → do nothing (grouped nodes have no children)
-			} else if (action === 'treeBack') {
-				const neighbor = findNearest(currentLn, groupNodes, axis, forward);
-				if (neighbor) {
-					navigateToPath(neighbor.node.path);
-				} else if (node.parentPath) {
-					// At back edge of group → go to parent
-					navigateToPath(node.parentPath);
-				}
-			}
-		} else {
-			// ── Outside a group box: individually laid out nodes ──
-
-			if (layoutMode === 'balanced') {
+		// Arrow keys: resolve physical key → logical action → nav method
+		// Special case: balanced root node, ArrowLeft/Right enter specific arms
+		if (layoutMode === 'balanced') {
+			const node = ctrlRef.getNodeByPath(selectedPath);
+			if (node) {
+				const currentLn = layoutNodes.find(ln => ln.node.path === node.path);
 				const rootLn = getBalancedRootLn();
-				if (!rootLn) return;
-				const armDir = getBalancedArmDir(currentLn, rootLn);
-
-				if (armDir === 'root') {
-					// Root node: arrows directly enter the respective arm
+				if (currentLn && rootLn && getBalancedArmDir(currentLn, rootLn) === 'root') {
 					if (e.key === 'ArrowRight') {
+						e.preventDefault();
 						const rightKids = (currentLn.children || []).filter(c => c.cx > currentLn.cx);
 						if (rightKids.length > 0) {
 							const best = rightKids.reduce((a, b) =>
@@ -1275,7 +1646,9 @@
 							);
 							navigateToPath(best.node.path);
 						}
+						return;
 					} else if (e.key === 'ArrowLeft') {
+						e.preventDefault();
 						const leftKids = (currentLn.children || []).filter(c => c.cx < currentLn.cx);
 						if (leftKids.length > 0) {
 							const best = leftKids.reduce((a, b) =>
@@ -1283,131 +1656,116 @@
 							);
 							navigateToPath(best.node.path);
 						}
+						return;
 					}
 					// Up/Down from root: no siblings — do nothing
-				} else {
-					// Non-root node in an arm: use the arm's direction
-					const armAction = resolveNavAction(e.key, armDir);
-					if (!armAction) return;
+					return;
+				}
+			}
+		}
 
-					if (armAction === 'crossPrev' || armAction === 'crossNext') {
-						const { axis, forward } = resolveAxis(armAction, armDir);
-						const neighbor = findBalancedCrossNeighbor(currentLn, rootLn.cx, axis, forward);
-						if (neighbor) navigateToPath(neighbor.node.path);
-					} else if (armAction === 'treeForward') {
-						if (node.hasChildren && node.isExpanded) {
-							const children = ctrlRef.getChildren(node.path);
-							if (children.length > 0) navigateToPath(children[0].path);
-						}
-					} else if (armAction === 'treeBack') {
-						if (node.parentPath) navigateToPath(node.parentPath);
+		// Special case: fishbone physical-key-to-action mapping differs from generic
+		if (layoutMode === 'fishbone') {
+			const currentLn = layoutNodes.find(ln => ln.node.path === selectedPath);
+			if (!currentLn) return;
+
+			const isH = !(growthDirection === 'up' || growthDirection === 'down');
+			const branchAxis: 'x' | 'y' = isH ? 'y' : 'x';
+			const spineForwardKey = isH ? 'ArrowLeft' : 'ArrowUp';
+			const spineBackKey = isH ? 'ArrowRight' : 'ArrowDown';
+			const branchKey1 = isH ? 'ArrowUp' : 'ArrowLeft';
+			const branchKey2 = isH ? 'ArrowDown' : 'ArrowRight';
+
+			if (currentLn.depth === 0) {
+				// Root: only spine forward enters children
+				if (e.key === spineForwardKey) {
+					e.preventDefault();
+					ctrlRef.navInto();
+				}
+				return;
+			}
+
+			if (currentLn.depth === 1) {
+				// Spine node: spine keys = cross siblings, branch keys = enter/cross children
+				if (e.key === spineForwardKey || e.key === spineBackKey) {
+					e.preventDefault();
+					if (e.key === spineBackKey) ctrlRef.navNextSibling();
+					else ctrlRef.navPrevSibling();
+				} else if (e.key === branchKey1 || e.key === branchKey2) {
+					e.preventDefault();
+					// Enter branch children in pressed direction, or cross to other side
+					const myBranchPos = branchAxis === 'y' ? currentLn.cy : currentLn.cx;
+					const rootLn = layoutNodes.find(ln => ln.depth === 0);
+					const rootBranchPos = rootLn ? (branchAxis === 'y' ? rootLn.cy : rootLn.cx) : myBranchPos;
+					const mySpineSide = myBranchPos < rootBranchPos ? 'before' : 'after';
+					const wantBefore = e.key === branchKey1;
+					const children = currentLn.children || [];
+					const childrenInDir = children.filter(c => {
+						const cPos = branchAxis === 'y' ? c.cy : c.cx;
+						return wantBefore ? cPos < myBranchPos : cPos > myBranchPos;
+					});
+
+					if (childrenInDir.length > 0) {
+						const spineAxis: 'x' | 'y' = isH ? 'x' : 'y';
+						const best = childrenInDir.reduce((a, b) => {
+							const da = Math.abs((spineAxis === 'x' ? a.cx : a.cy) - (spineAxis === 'x' ? currentLn.cx : currentLn.cy));
+							const db = Math.abs((spineAxis === 'x' ? b.cx : b.cy) - (spineAxis === 'x' ? currentLn.cx : currentLn.cy));
+							return da < db ? a : b;
+						});
+						navigateToPath(best.node.path);
+					} else {
+						// Cross to other side
+						const allSpine = layoutNodes.filter(ln => ln.depth === 1);
+						const oppositeSide = mySpineSide === 'before' ? 'after' : 'before';
+						const otherSide = allSpine.filter(ln => {
+							const lnBranchPos = branchAxis === 'y' ? ln.cy : ln.cx;
+							const lnSide = lnBranchPos < rootBranchPos ? 'before' : 'after';
+							return lnSide === oppositeSide;
+						});
+						const spineAxis: 'x' | 'y' = isH ? 'x' : 'y';
+						const mySpinePos = spineAxis === 'x' ? currentLn.cx : currentLn.cy;
+						otherSide.sort((a, b) => {
+							const da = Math.abs((spineAxis === 'x' ? a.cx : a.cy) - mySpinePos);
+							const db = Math.abs((spineAxis === 'x' ? b.cx : b.cy) - mySpinePos);
+							return da - db;
+						});
+						const nearest = otherSide[0] ?? null;
+						if (nearest) navigateToPath(nearest.node.path);
 					}
 				}
 				return;
 			}
 
-			if (layoutMode === 'fishbone') {
-				// Fishbone has a fundamentally different spatial structure:
-				// - Spine (depth 1) nodes spread along one axis
-				// - Branch (depth 2+) nodes spread perpendicular to spine
-				// Generic treeForward/treeBack mapping doesn't work here.
-				const isH = !(growthDirection === 'up' || growthDirection === 'down');
-				const spineAxis: 'x' | 'y' = isH ? 'x' : 'y';
-				const branchAxis: 'x' | 'y' = isH ? 'y' : 'x';
-				// After mirror: spine goes away from root in the forward direction
-				const spineForwardKey = isH ? 'ArrowLeft' : 'ArrowUp';
-				const spineBackKey = isH ? 'ArrowRight' : 'ArrowDown';
-				const branchKey1 = isH ? 'ArrowUp' : 'ArrowLeft';       // toward smaller branch-axis coordinate
-				const branchKey2 = isH ? 'ArrowDown' : 'ArrowRight';    // toward larger branch-axis coordinate
+			// Branch node (depth 2+): spine keys = cross siblings, branch keys = parent/child/cross
+			if (e.key === spineForwardKey || e.key === spineBackKey) {
+				e.preventDefault();
+				if (e.key === spineBackKey) ctrlRef.navNextSibling();
+				else ctrlRef.navPrevSibling();
+			} else if (e.key === branchKey1 || e.key === branchKey2) {
+				e.preventDefault();
+				const wantBefore = e.key === branchKey1;
+				const myPos = branchAxis === 'y' ? currentLn.cy : currentLn.cx;
+				const parent = currentLn.parent;
+				const parentPos = parent ? (branchAxis === 'y' ? parent.cy : parent.cx) : null;
+				const parentIsBefore = parentPos !== null && parentPos < myPos;
+				const parentIsAfter = parentPos !== null && parentPos > myPos;
+				const children = currentLn.children || [];
+				const childrenInDir = children.filter(c => {
+					const cPos = branchAxis === 'y' ? c.cy : c.cx;
+					return wantBefore ? cPos < myPos : cPos > myPos;
+				});
 
-				if (currentLn.depth === 0) {
-					// Root: only enter spine (forward direction)
-					if (e.key === spineForwardKey) {
-						const kids = currentLn.children || [];
-						if (kids.length > 0) {
-							const best = kids.reduce((a, b) => {
-								const da = (a.cx - currentLn.cx) ** 2 + (a.cy - currentLn.cy) ** 2;
-								const db = (b.cx - currentLn.cx) ** 2 + (b.cy - currentLn.cy) ** 2;
-								return da < db ? a : b;
-							});
-							navigateToPath(best.node.path);
-						}
-					}
-				} else if (currentLn.depth === 1) {
-					// Spine node
-					// Determine which side of the fishbone this spine node is on
-					const rootLn = layoutNodes.find(ln => ln.depth === 0);
-					const myBranchPos = branchAxis === 'y' ? currentLn.cy : currentLn.cx;
-					const rootBranchPos = rootLn ? (branchAxis === 'y' ? rootLn.cy : rootLn.cx) : myBranchPos;
-					const mySpineSide = myBranchPos < rootBranchPos ? 'before' : 'after';
-					const allSpine = layoutNodes.filter(ln => ln.depth === 1);
-
-					if (e.key === spineForwardKey || e.key === spineBackKey) {
-						// Left/Right: same-side spine siblings, sorted by spine-axis distance
-						const forward = e.key === spineBackKey;
-						const mySpinePos = spineAxis === 'x' ? currentLn.cx : currentLn.cy;
-						const sameSide = allSpine.filter(ln => {
-							const lnBranchPos = branchAxis === 'y' ? ln.cy : ln.cx;
-							const lnSide = lnBranchPos < rootBranchPos ? 'before' : 'after';
-							return lnSide === mySpineSide;
-						});
-						const inDir = sameSide.filter(ln => {
-							if (ln.node.path === currentLn.node.path) return false;
-							const lnPos = spineAxis === 'x' ? ln.cx : ln.cy;
-							return forward ? lnPos > mySpinePos + 1 : lnPos < mySpinePos - 1;
-						});
-						inDir.sort((a, b) => {
-							const aPos = spineAxis === 'x' ? a.cx : a.cy;
-							const bPos = spineAxis === 'x' ? b.cx : b.cy;
-							return forward ? aPos - bPos : bPos - aPos;
-						});
-						const neighbor = inDir[0] ?? null;
-						if (neighbor) {
-							navigateToPath(neighbor.node.path);
-						} else if (e.key === spineBackKey && currentLn.parent) {
-							navigateToPath(currentLn.parent.node.path);
-						}
-					} else if (e.key === branchKey1 || e.key === branchKey2) {
-						const wantBefore = e.key === branchKey1;
-						const children = currentLn.children || [];
-
-						// Check if children are in the pressed direction
-						const childrenInDir = children.filter(c => {
-							const cPos = branchAxis === 'y' ? c.cy : c.cx;
-							return wantBefore ? cPos < myBranchPos : cPos > myBranchPos;
-						});
-
-						if (childrenInDir.length > 0) {
-							// Enter branch children
-							const best = childrenInDir.reduce((a, b) => {
-								const da = Math.abs((spineAxis === 'x' ? a.cx : a.cy) - (spineAxis === 'x' ? currentLn.cx : currentLn.cy));
-								const db = Math.abs((spineAxis === 'x' ? b.cx : b.cy) - (spineAxis === 'x' ? currentLn.cx : currentLn.cy));
-								return da < db ? a : b;
-							});
-							navigateToPath(best.node.path);
-						} else {
-							// Cross to other side: nearest spine node on opposite side by spine-axis
-							const oppositeSide = mySpineSide === 'before' ? 'after' : 'before';
-							const otherSide = allSpine.filter(ln => {
-								const lnBranchPos = branchAxis === 'y' ? ln.cy : ln.cx;
-								const lnSide = lnBranchPos < rootBranchPos ? 'before' : 'after';
-								return lnSide === oppositeSide;
-							});
-							const mySpinePos = spineAxis === 'x' ? currentLn.cx : currentLn.cy;
-							otherSide.sort((a, b) => {
-								const da = Math.abs((spineAxis === 'x' ? a.cx : a.cy) - mySpinePos);
-								const db = Math.abs((spineAxis === 'x' ? b.cx : b.cy) - mySpinePos);
-								return da - db;
-							});
-							const nearest = otherSide[0] ?? null;
-							if (nearest) {
-								navigateToPath(nearest.node.path);
-							}
-						}
-					}
-				} else {
-					// Branch node (depth 2+)
-					// Helpers: walk up to depth-1 ancestor and determine spine side
+				if ((wantBefore ? parentIsBefore : parentIsAfter) && parent) {
+					navigateToPath(parent.node.path);
+				} else if (childrenInDir.length > 0) {
+					const spineAxis: 'x' | 'y' = isH ? 'x' : 'y';
+					const best = childrenInDir.reduce((a, b) => {
+						const da = Math.abs((spineAxis === 'x' ? a.cx : a.cy) - (spineAxis === 'x' ? currentLn.cx : currentLn.cy));
+						const db = Math.abs((spineAxis === 'x' ? b.cx : b.cy) - (spineAxis === 'x' ? currentLn.cx : currentLn.cy));
+						return da < db ? a : b;
+					});
+					navigateToPath(best.node.path);
+				} else if (fishboneCrossNav) {
 					const getSpineAncestor = (ln: LayoutNode<T>): LayoutNode<T> => {
 						let a = ln;
 						while (a.parent && a.depth > 1) a = a.parent;
@@ -1419,89 +1777,47 @@
 						const spineCoord = branchAxis === 'y' ? spine.cy : spine.cx;
 						return coord < spineCoord ? 'before' : 'after';
 					};
-
-					const spineAnc = getSpineAncestor(currentLn);
 					const mySide = getSpineSide(currentLn);
-					if (e.key === spineForwardKey || e.key === spineBackKey) {
-						// Left/Right: same-side siblings at same depth across all spine branches
-						const forward = e.key === spineBackKey;
-						const sameSideSiblings = layoutNodes.filter(ln =>
-							ln.depth === currentLn.depth && getSpineSide(ln) === mySide
-						);
-						const neighbor = findNearest(currentLn, sameSideSiblings, spineAxis, forward);
-						if (neighbor) {
-							navigateToPath(neighbor.node.path);
-						} else if (e.key === spineBackKey) {
-							// No more same-side siblings toward root — go to spine ancestor
-							navigateToPath(spineAnc.node.path);
-						}
-					} else if (e.key === branchKey1 || e.key === branchKey2) {
-						// Up/Down: parent/child within branch, then cross-spine
-						const wantBefore = e.key === branchKey1;
-						const myPos = branchAxis === 'y' ? currentLn.cy : currentLn.cx;
-						const parent = currentLn.parent;
-						const parentPos = parent ? (branchAxis === 'y' ? parent.cy : parent.cx) : null;
-						const parentIsBefore = parentPos !== null && parentPos < myPos;
-						const parentIsAfter = parentPos !== null && parentPos > myPos;
-						const parentIsBranch = parent !== null && parent.depth > 1;
-						const children = currentLn.children || [];
-
-						// Check if children exist in the desired direction
-						const childrenInDir = children.filter(c => {
-							const cPos = branchAxis === 'y' ? c.cy : c.cx;
-							return wantBefore ? cPos < myPos : cPos > myPos;
-						});
-
-						// Priority 1: Parent is in that direction (branch or spine — return to spine before crossing)
-						if ((wantBefore ? parentIsBefore : parentIsAfter) && parent) {
-							navigateToPath(parent.node.path);
-						}
-						// Priority 2: Children in that direction → go to nearest child
-						else if (childrenInDir.length > 0) {
-							const best = childrenInDir.reduce((a, b) => {
-								const da = Math.abs((spineAxis === 'x' ? a.cx : a.cy) - (spineAxis === 'x' ? currentLn.cx : currentLn.cy));
-								const db = Math.abs((spineAxis === 'x' ? b.cx : b.cy) - (spineAxis === 'x' ? currentLn.cx : currentLn.cy));
-								return da < db ? a : b;
-							});
-							navigateToPath(best.node.path);
-						}
-						// Priority 3: Cross to other side of spine (gated by fishboneCrossNav)
-						else if (fishboneCrossNav) {
-							const oppositeSide = mySide === 'before' ? 'after' : 'before';
-							const crossCandidates = layoutNodes.filter(ln =>
-								ln.depth === currentLn.depth && getSpineSide(ln) === oppositeSide
-							);
-							const nearest = findNearest(currentLn, crossCandidates, spineAxis, true)
-								|| findNearest(currentLn, crossCandidates, spineAxis, false);
-							if (nearest) {
-								navigateToPath(nearest.node.path);
-							} else if (parent) {
-								navigateToPath(parent.node.path);
-							}
-						}
-						// Priority 4: Fallback — go to parent (always available when P3 skipped)
-						else if (parent) {
-							navigateToPath(parent.node.path);
-						}
+					const oppositeSide = mySide === 'before' ? 'after' : 'before';
+					const spineAxis: 'x' | 'y' = isH ? 'x' : 'y';
+					const crossCandidates = layoutNodes.filter(ln =>
+						ln.depth === currentLn.depth && getSpineSide(ln) === oppositeSide
+					);
+					const nearest = findNearest(currentLn, crossCandidates, spineAxis, true)
+						|| findNearest(currentLn, crossCandidates, spineAxis, false);
+					if (nearest) {
+						navigateToPath(nearest.node.path);
+					} else if (parent) {
+						navigateToPath(parent.node.path);
 					}
+				} else if (parent) {
+					navigateToPath(parent.node.path);
 				}
-				return;
 			}
+			return;
+		}
 
-			if (action === 'crossPrev' || action === 'crossNext') {
-				const { axis, forward } = resolveAxis(action);
-				const neighbor = findSpatialNeighborAtDepth(currentLn, axis, forward);
-				if (neighbor) navigateToPath(neighbor.node.path);
-			} else if (action === 'treeForward') {
-				// Go to first child if expanded
-				if (node.hasChildren && node.isExpanded) {
-					const children = ctrlRef.getChildren(node.path);
-					if (children.length > 0) navigateToPath(children[0].path);
-				}
-			} else if (action === 'treeBack') {
-				// Go to parent
-				if (node.parentPath) navigateToPath(node.parentPath);
+		// Generic and balanced (non-root) layouts: map arrow key → nav method
+		// For balanced layout, invert Left/Right for nodes on the left arm
+		let navDir: GrowthDirection | undefined;
+		if (layoutMode === 'balanced') {
+			const currentLn = layoutNodes.find(ln => ln.node.path === selectedPath);
+			const rootLn = getBalancedRootLn();
+			if (currentLn && rootLn) {
+				const arm = getBalancedArmDir(currentLn, rootLn);
+				if (arm === 'left') navDir = 'left';
+				else if (arm === 'right') navDir = 'right';
 			}
+		}
+		const action = resolveNavAction(e.key, navDir);
+		if (!action) return;
+		e.preventDefault();
+
+		switch (action) {
+			case 'crossNext':   ctrlRef.navNextSibling(); break;
+			case 'crossPrev':   ctrlRef.navPrevSibling(); break;
+			case 'treeForward': ctrlRef.navInto(); break;
+			case 'treeBack':    ctrlRef.navOut(); break;
 		}
 	}
 
@@ -1513,6 +1829,18 @@
 	}
 
 	// ── Effects ─────────────────────────────────────────────────────────
+
+	// Auto-pan to selected node when selectedPath changes externally
+	$effect(() => {
+		const path = selectedPath;
+		if (autoFocusOnSelect && path && canvasEl) {
+			interaction.ensurePathVisible(path);
+			// Also scroll the page so the canvas container is visible
+			if (containerEl) {
+				containerEl.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+			}
+		}
+	});
 
 	// Clear text cache when font changes
 	$effect(() => {
@@ -1873,7 +2201,7 @@
 	isCollapsibleMember={isCollapsibleMember}
 	getIsCollapsibleCallback={getIsCollapsibleCallback}
 	orderMember={orderMember}
-	contextMenuCallback={onNodeContextMenuCb ? (node, _close, selectedNodes) => onNodeContextMenuCb(node, selectedNodes) : undefined}
+	getContextMenuItemsCallback={getNodeContextMenuItemsHandler ? (node, _close, selectedNodes) => getNodeContextMenuItemsHandler(node, selectedNodes) : undefined}
 	contextMenuXOffset={8}
 	contextMenuYOffset={4}
 >
@@ -1956,7 +2284,7 @@
 		{/snippet}
 
 		{#if ctrl.contextMenuVisible && ctrl.contextMenuNode}
-			{@const menuEntries = ctrl.contextMenuCallbackCb?.(ctrl.contextMenuNode, ctrl.closeContextMenu.bind(ctrl)) || []}
+			{@const menuEntries = ctrl.getContextMenuItemsHandler?.(ctrl.contextMenuNode, ctrl.closeContextMenu.bind(ctrl)) || []}
 			{@const _log = console.debug(`[CanvasTree] Rendering context menu: node=${ctrl.contextMenuNode.path}, entries=${menuEntries.length}, pos=${ctrl.contextMenuX},${ctrl.contextMenuY}`)}
 			<div class="canvas-tree-ctx-menu" style="position: fixed; left: {ctrl.contextMenuX}px; top: {ctrl.contextMenuY}px; z-index: 10000;" role="menu">
 				<div class="canvas-tree-ctx-menu-header">{getLabel(ctrl.contextMenuNode as LTreeNode<T>)}</div>

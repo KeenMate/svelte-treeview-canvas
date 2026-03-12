@@ -29,6 +29,7 @@ export interface InteractionCallbacks<T> {
 	onCloseContextMenu: () => void;
 	onHoverChange: (ln: LayoutNode<T> | null) => void;
 	onSelectionChange: (path: string | null, modifiers?: { ctrl: boolean; shift: boolean }) => void;
+	onEmptyClick?: () => void;
 	onRectangleSelect?: (paths: string[], additive: boolean) => void;
 	getNodeLabel: (ln: LayoutNode<T>) => string;
 	hitTestOverride?: () => ((wx: number, wy: number) => LayoutNode<T> | null) | null;
@@ -429,6 +430,11 @@ export function createInteractionManager<T>(
 				if (config.getClickBehavior() === 'expand-and-focus') {
 					focusOnNode(hit);
 				}
+				callbacks.requestRedraw();
+			} else if (panDist < 5 && !panClickNode && !mods.ctrl && !mods.shift) {
+				// Click on empty canvas — deselect all
+				callbacks.onEmptyClick?.();
+				callbacks.onCloseContextMenu();
 				callbacks.requestRedraw();
 			}
 			panClickNode = null;

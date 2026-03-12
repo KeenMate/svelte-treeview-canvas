@@ -392,7 +392,7 @@
 					showDotGrid={true}
 					getNodeLabelCallback={(node) => node.data?.name || node.path}
 					renderBodyCallback={renderBody}
-					onNodeContextMenu={getContextMenu}
+					getNodeContextMenuItemsCallback={getContextMenu}
 				/>
 			</div>
 		{/key}
@@ -467,7 +467,7 @@
 				showDotGrid={geoShowDots}
 				getNodeLabelCallback={(node) => node.data?.name || node.path}
 				renderBodyCallback={renderBody}
-				onNodeContextMenu={getContextMenu}
+				getNodeContextMenuItemsCallback={getContextMenu}
 			/>
 		</div>
 	</div>

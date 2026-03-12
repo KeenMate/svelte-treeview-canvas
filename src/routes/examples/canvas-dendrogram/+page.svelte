@@ -155,6 +155,24 @@
 	// Drop log
 	let dropLog = $state<string[]>([]);
 
+	// Clipboard
+	let enableClipboard = $state(true);
+	let nextPasteId = $state(10000);
+	function transformDataForPaste(data: TreeItem, index: number, operation: 'copy' | 'cut'): TreeItem {
+		return {
+			...data,
+			id: nextPasteId++,
+			name: operation === 'copy' ? `${data.name} (copy)` : data.name
+		};
+	}
+	function onPaste(result: { success: boolean; count: number; error?: string }) {
+		if (result.success) {
+			dropLog = [`Pasted ${result.count} node(s)`, ...dropLog.slice(0, 9)];
+		} else {
+			dropLog = [`Paste failed: ${result.error}`, ...dropLog.slice(0, 9)];
+		}
+	}
+
 	// Search & filter
 	type SearchMode = 'search' | 'filter';
 	let searchMode: SearchMode = $state(saved.searchMode ?? 'search');
@@ -191,6 +209,34 @@
 
 		if (isMulti) {
 			// ── Multi-selection context menu ─────────────────────────────
+			if (enableClipboard) {
+				items.push({
+					icon: '\u{1F4CB}',
+					label: `Copy ${selCount} nodes`,
+					shortcut: 'Ctrl+C',
+					onclick: () => ctrlRef?.copyNodes()
+				});
+				items.push({
+					icon: '\u{2702}',
+					label: `Cut ${selCount} nodes`,
+					shortcut: 'Ctrl+X',
+					onclick: () => ctrlRef?.cutNodes()
+				});
+				if (ctrlRef?.hasClipboardContent()) {
+					items.push({
+						icon: '\u{1F4CC}',
+						label: 'Paste as child',
+						shortcut: 'Ctrl+V',
+						onclick: () => {
+							if (ctrlRef && selectedPath) {
+								const result = ctrlRef.pasteNodes(selectedPath, transformDataForPaste, 'child');
+								onPaste(result);
+							}
+						}
+					});
+				}
+				items.push({ divider: true });
+			}
 			items.push({
 				icon: '\u{1F4E6}',
 				label: `Export ${selCount} nodes as CSV`,
@@ -272,6 +318,34 @@
 			onclick: () => navigator.clipboard.writeText(node.path)
 		});
 
+		if (enableClipboard) {
+			items.push({ divider: true, label: 'Clipboard' });
+			items.push({
+				icon: '\u{1F4CB}',
+				label: 'Copy',
+				shortcut: 'Ctrl+C',
+				onclick: () => ctrlRef?.copyNodes([node.path])
+			});
+			items.push({
+				icon: '\u{2702}',
+				label: 'Cut',
+				shortcut: 'Ctrl+X',
+				onclick: () => ctrlRef?.cutNodes([node.path])
+			});
+			items.push({
+				icon: '\u{1F4CC}',
+				label: 'Paste as child',
+				shortcut: 'Ctrl+V',
+				isDisabled: !ctrlRef?.hasClipboardContent(),
+				onclick: () => {
+					if (ctrlRef) {
+						const result = ctrlRef.pasteNodes(node.path, transformDataForPaste, 'child');
+						onPaste(result);
+					}
+				}
+			});
+		}
+
 		return items;
 	}
 
@@ -324,6 +398,21 @@
 			label: 'Focus on parent',
 			onclick: () => canvasTreeRef?.focusOnPath(parentNode.path)
 		});
+
+		if (enableClipboard && ctrlRef?.hasClipboardContent()) {
+			items.push({ divider: true, label: 'Clipboard' });
+			items.push({
+				icon: '\u{1F4CC}',
+				label: `Paste into "${parentNode.data?.name}"`,
+				shortcut: 'Ctrl+V',
+				onclick: () => {
+					if (ctrlRef) {
+						const result = ctrlRef.pasteNodes(parentNode.path, transformDataForPaste, 'child');
+						onPaste(result);
+					}
+				}
+			});
+		}
 
 		return items;
 	}
@@ -736,6 +825,9 @@
 					data={treeData}
 					idMember="id"
 					pathMember="path"
+					parentPathMember="parentPath"
+					levelMember="level"
+					hasChildrenMember="hasChildren"
 					{sortCallback}
 					isSorted={true}
 					expandLevel={1}
@@ -773,10 +865,13 @@
 					bind:gridNodeMaxW
 					{levelConfig}
 					getNodeLabelCallback={(node) => node.data?.name || node.path}
-					onNodeContextMenu={getCanvasContextMenu}
-					onGroupContextMenu={getGroupContextMenu}
-					onCanvasContextMenu={getCanvasEmptyContextMenu}
+					getNodeContextMenuItemsCallback={getCanvasContextMenu}
+					getGroupContextMenuItemsCallback={getGroupContextMenu}
+					getCanvasContextMenuItemsCallback={getCanvasEmptyContextMenu}
 					{onNodeDrop}
+					{enableClipboard}
+					{transformDataForPaste}
+					{onPaste}
 				/>
 			</div>
 		{/key}

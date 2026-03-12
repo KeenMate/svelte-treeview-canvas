@@ -4,12 +4,14 @@ Canvas 2D rendering plugin for [`@keenmate/svelte-treeview`](https://github.com/
 
 This package was originally part of `@keenmate/svelte-treeview` but has been extracted into its own package to separate concerns — the core package handles tree data, expand/collapse, search, drag & drop logic, while this package provides a high-performance canvas renderer on top of the same core. **You still need `@keenmate/svelte-treeview` installed** — it is a required peer dependency.
 
-## What's New in v1.0.0-rc03
+## What's New in v1.0.0-rc02
 
-- **Multi-select**: Ctrl+click toggle, Shift+click range, Shift+drag rectangle selection. New `selectedPaths` bindable, `onSelectionChanged` event, `rangeSelectionMode` prop (`'visual'` 2D bounding-box vs `'logical'` tree-order).
-- **Double-click expand**: `clickBehavior="select"` mode — single click selects, double-click expands. Ideal for multi-select workflows.
-- **4-level context menu**: Node, selection, group box (`onGroupContextMenu`), and canvas (`onCanvasContextMenu`). Selection-aware menus via `selectedNodes` parameter.
-- **Canvas Dendrogram example**: Full demo of all multi-select features with localStorage-persisted config.
+- **Multi-select**: Ctrl+click toggle, Shift+click range, Shift+drag rectangle selection. Visual (2D bounding-box) and logical (tree-order) range modes.
+- **4-level context menu**: Node, selection, group box, and canvas-level menus with icons, shortcuts, submenus, and dividers.
+- **Spatial keyboard navigation**: Full arrow-key nav based on node positions, with correct handling for balanced and fishbone layouts. `navigationOverrides` prop for custom overrides.
+- **`autoFocusOnSelect`**: Auto-pans canvas viewport to the selected node and scrolls the page to the canvas if needed.
+- **Canvas clipboard**: `enableClipboard` prop for Ctrl+C/X/V support. Cut nodes rendered at 40% opacity.
+- **Callback rename**: `onNodeContextMenu` → `getNodeContextMenuItemsCallback` (and similar) for clearer event vs data-provider distinction.
 
 ### v1.0.0-rc02
 

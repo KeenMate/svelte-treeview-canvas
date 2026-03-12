@@ -245,7 +245,7 @@
 	<!-- Preset selector -->
 	<div class="card">
 		<h2>Menu Preset</h2>
-		<p class="description">Each preset demonstrates a different combination of context menu features. The menu is built dynamically via <code>onNodeContextMenu</code> callback.</p>
+		<p class="description">Each preset demonstrates a different combination of context menu features. The menu is built dynamically via <code>getNodeContextMenuItemsCallback</code> callback.</p>
 
 		<div class="preset-grid">
 			{#each Object.entries(presetDescriptions) as [key, desc]}
@@ -308,8 +308,8 @@
 				bind:selectedPath
 				bind:controller={ctrlRef}
 				getNodeLabelCallback={(node) => node.data?.name || node.path}
-				onNodeContextMenu={getContextMenu}
-				onCanvasContextMenu={getCanvasContextMenu}
+				getNodeContextMenuItemsCallback={getContextMenu}
+				getCanvasContextMenuItemsCallback={getCanvasContextMenu}
 			/>
 		</div>
 	</div>
@@ -367,7 +367,7 @@ type ContextMenuEntry = ContextMenuItem | ContextMenuDivider;`}</pre>
 
 <CanvasTree
   {data}
-  onNodeContextMenu={getContextMenu}
+  getNodeContextMenuItemsCallback={getContextMenu}
   ...
 />
 
