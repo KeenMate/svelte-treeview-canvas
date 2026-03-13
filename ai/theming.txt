@@ -1,0 +1,173 @@
+THEMING
+=======
+
+Three-level priority system:
+1. theme prop (highest) — Partial<CanvasTheme> object
+2. CSS variables — --ct-* component vars, --base-* shared vars
+3. Hardcoded defaults (lowest) — defaultCanvasTheme
+
+USING THEME PROP
+-----------------
+<script>
+  import type { CanvasTheme } from '@keenmate/svelte-treeview-canvas';
+
+  const darkTheme: Partial<CanvasTheme> = {
+    bg: '#080c14',
+    nodeBg: '#1a1f2e',
+    nodeBorder: '#2a3040',
+    nodeText: '#e0e8f0',
+    nodeSelectedBg: '#1a3a5c',
+    nodeSelectedBorder: '#00a8ff',
+    connColor: '#00e5ff40',
+    connWidth: 1,
+  };
+</script>
+
+<CanvasTree theme={darkTheme} ... />
+
+USING CSS VARIABLES
+--------------------
+<div style="--ct-node-bg: #1a1f2e; --ct-node-border: #2a3040;">
+  <CanvasTree ... />
+</div>
+
+Or use shared --base-* tokens (used by all KeenMate components):
+<div style="--base-accent-color: #ff6b00; --base-main-bg: #111;">
+  <CanvasTree ... />
+</div>
+
+CANVASTHEME PROPERTIES
+-----------------------
+
+Canvas Background:
+  bg                    — Canvas background color
+
+Node Geometry (also settable as props):
+  nodeHeight            — Node height (px)
+  nodeMinWidth          — Min node width (px)
+  nodeMaxWidth          — Max node width, 0 = unlimited (px)
+  nodePaddingX          — Horizontal padding (px)
+  nodeGap               — Gap between siblings (px)
+  columnGap             — Gap between depth columns (px)
+  levelSpacingV         — Vertical level spacing (px)
+  colorBarWidth         — Depth color bar width (px)
+  fontSize              — Base font size (px)
+
+Depth Colors (10-color cycling palette):
+  depthColor0 - depthColor9
+
+Node States:
+  nodeBg, nodeBorder, nodeBorderWidth, nodeRadius, nodeText     — Idle
+  nodeSelectedBg, nodeSelectedBorder                            — Selected
+  nodeHoverBg, nodeHoverBorder                                  — Hover
+  nodeDropBg, nodeDropBorder                                    — Drop target
+  nodeMatchBg, nodeMatchBorder                                  — Search match
+  nodeCurrentBg, nodeCurrentBorder                              — Current search result
+
+Selection Rectangle (Shift+drag):
+  selectionRectFill, selectionRectStroke
+
+Chevron (Expand/Collapse):
+  chevronColor, chevronSize
+  chevronExpanded ('▾'), chevronCollapsed ('▸')
+  chevronFontFamily, chevronFontWeight, chevronPaddingEnd
+
+Badge:
+  badgeText, badgeHeight, badgeFontSize
+
+Connections:
+  connColor, connWidth
+
+Minimap:
+  minimapBg, minimapBorder, minimapViewport
+  minimapWidth, minimapHeight
+
+Dot Grid:
+  gridColor, gridSize
+
+Drop Zones:
+  dzBefore, dzAfter, dzChild, dzRadius
+
+Drag Ghost:
+  ghostBg, ghostBorder, ghostOpacity
+
+Tooltip (DOM overlay):
+  tooltipBg, tooltipText, tooltipRadius
+
+Context Menu (DOM overlay):
+  menuBg, menuText, menuHover, menuRadius
+
+CSS VARIABLE MAPPING
+---------------------
+Each theme property has a --ct-* CSS variable with optional --base-* fallback:
+
+--ct-bg                    / --base-main-bg
+--ct-node-bg               / --base-elevated-bg
+--ct-node-border           / --base-border-color
+--ct-node-text             / --base-text-color-1
+--ct-node-selected-bg      / --base-accent-color-light
+--ct-node-selected-border  / --base-accent-color
+--ct-node-hover-bg         / --base-hover-bg
+--ct-chevron-color         / --base-text-color-3
+--ct-badge-text            / --base-text-color-on-accent
+--ct-conn-color            / --base-text-color-3
+--ct-minimap-border        / --base-border-color
+--ct-minimap-viewport      / --base-accent-color
+--ct-grid-color            / --base-border-color
+--ct-ghost-bg              / --base-elevated-bg
+--ct-ghost-border          / --base-accent-color
+--ct-dz-before             / --base-success-color
+--ct-font-family           / --base-font-family
+
+DEPTH COLORS
+-------------
+--ct-depth-color-0 through --ct-depth-color-9
+Fallback: --pa-color-1 through --pa-color-9 (for 0-8)
+
+Used for color bar and badge background. Cycles every 10 levels.
+
+Override as prop:
+<CanvasTree depthColors={['#ff0000', '#00ff00', '#0000ff', ...]} ... />
+
+PER-LEVEL OVERRIDES
+--------------------
+levelConfig prop for per-depth customization:
+
+<CanvasTree
+  levelConfig={[
+    { height: 60, minWidth: 200, color: '#ff6b00' },  // depth 0
+    { height: 44, gap: 8 },                            // depth 1
+    { height: 36, minWidth: 120 },                     // depth 2
+  ]}
+  ...
+/>
+
+CanvasLevelConfig: { height?, minWidth?, maxWidth?, gap?, color? }
+
+THEME PRESETS EXAMPLE
+----------------------
+// Futuristic dark theme
+const futuristic: Partial<CanvasTheme> = {
+  bg: '#080c14',
+  connColor: '#00e5ff40',
+  connWidth: 1,
+  gridColor: '#00e5ff18',
+  gridSize: 24,
+  nodeBg: '#0d1420',
+  nodeBorder: '#00e5ff30',
+  nodeText: '#c0f0ff',
+  nodeSelectedBg: '#002a40',
+  nodeSelectedBorder: '#00e5ff',
+  minimapBg: 'rgba(8,12,20,0.95)',
+  minimapBorder: '#00e5ff30',
+  minimapViewport: '#00e5ff',
+};
+
+FONT LOADING
+-------------
+--ct-font-family (or --base-font-family) only passes the font name.
+The actual font files must be loaded at the DOCUMENT level:
+- @font-face in global CSS
+- <link> to Google Fonts
+
+Canvas ctx.font requires fonts to be loaded at document level.

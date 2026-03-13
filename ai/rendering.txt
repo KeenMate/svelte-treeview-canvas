@@ -1,0 +1,183 @@
+RENDERING
+=========
+
+Custom node rendering via slot callbacks and full node override.
+
+LEVEL OF DETAIL (LOD)
+----------------------
+Three zoom tiers based on zoom level:
+- full:   zoom > zoomLodText (0.35) — all text, badges, chevrons
+- medium: zoom > zoomLodSimple (0.12) — simplified text, no badges
+- simple: zoom <= zoomLodSimple — colored rectangles only
+
+Thresholds configurable via zoomLodText and zoomLodSimple props.
+
+NODE RENDER SLOTS
+-----------------
+Default node rendering has 5 slots (drawn in order):
+1. Background — rounded rectangle fill + border
+2. Color bar — vertical depth-color strip on left edge
+3. Body — label text (+ subtitle in custom renderers)
+4. Chevron — expand/collapse arrow on right edge
+5. Badge — child count circle on right side
+
+Each slot has a default implementation and can be overridden individually.
+
+RENDER CONTEXT
+--------------
+All render callbacks receive CanvasRenderContext<T>:
+
+interface CanvasRenderContext<T> {
+  ctx: CanvasRenderingContext2D;  // Canvas 2D context
+  node: LTreeNode<T>;            // Tree node data
+  label: string;                 // Resolved display label
+  badgeContent: string | null;   // Resolved badge text
+  bounds: CanvasNodeBounds;      // { x, y, w, h, cx, cy, depth }
+  state: CanvasNodeState;        // { isSelected, isHovered, isDragSource, ... }
+  lod: LodLevel;                 // 'full' | 'medium' | 'simple'
+  depthColor: string;            // Color for this depth level
+  config: CanvasVisualConfig;    // Geometry + font config
+  theme: CanvasTheme;            // Resolved theme values
+}
+
+SLOT CALLBACKS
+--------------
+Override individual slots while keeping other defaults:
+
+<CanvasTree
+  renderBodyCallback={(rctx) => {
+    const { ctx, node, bounds, theme, lod } = rctx;
+    if (lod === 'simple') return; // no text at simple LOD
+
+    const x = bounds.x + 12;
+    const y = bounds.y + bounds.h / 2;
+
+    ctx.fillStyle = theme.nodeText;
+    ctx.font = `bold 13px ${theme.fontFamily || 'sans-serif'}`;
+    ctx.fillText(node.data?.name || '', x, y - 6);
+
+    ctx.fillStyle = '#888';
+    ctx.font = `11px ${theme.fontFamily || 'sans-serif'}`;
+    ctx.fillText(node.data?.role || '', x, y + 10);
+  }}
+  ...
+/>
+
+FULL NODE OVERRIDE
+-------------------
+Override entire node rendering (skips all default slots):
+
+<CanvasTree
+  renderNodeCallback={(rctx) => {
+    const { ctx, bounds, state, depthColor } = rctx;
+
+    // Draw custom node shape
+    ctx.fillStyle = state.isSelected ? '#2563eb' : depthColor;
+    ctx.beginPath();
+    ctx.roundRect(bounds.x, bounds.y, bounds.w, bounds.h, 8);
+    ctx.fill();
+
+    // Draw custom content...
+  }}
+  ...
+/>
+
+CUSTOM NODE SIZING
+------------------
+Override width/height calculation:
+
+<CanvasTree
+  measureNodeWidthCallback={(ctx, node, config) => {
+    const label = node.data?.name || '';
+    return Math.max(config.nodeMinWidth, ctx.measureText(label).width + 40);
+  }}
+  measureNodeHeightCallback={(ctx, node, config) => {
+    return node.data?.hasSubtitle ? 56 : 40;
+  }}
+  ...
+/>
+
+NODE LABEL
+----------
+Control what text appears on nodes:
+
+<CanvasTree
+  getNodeLabelCallback={(node) => `[${node.path}] ${node.data?.name || ''}`}
+  ...
+/>
+
+BADGE CONTENT
+--------------
+Control badge text (default: child count):
+
+<CanvasTree
+  getBadgeContentCallback={(node) => {
+    if (!node.hasChildren) return null;
+    const count = Object.keys(node.children).length;
+    return count > 0 ? String(count) : null;
+  }}
+  ...
+/>
+
+TRUNCATE TEXT UTILITY
+---------------------
+Exported helper for custom renderBodyCallback:
+
+import { truncateText } from '@keenmate/svelte-treeview-canvas';
+
+// Binary-search ellipsis truncation
+const truncated = truncateText(ctx, 'Long text here...', maxWidth);
+ctx.fillText(truncated, x, y);
+
+DEFAULT RENDERERS (exported)
+-----------------------------
+Import defaults to compose with custom logic:
+
+import {
+  defaultRenderBackground,
+  defaultRenderColorBar,
+  defaultRenderBody,
+  defaultRenderChevron,
+  defaultRenderBadge,
+  getBadgeWidth,
+  defaultBadgeContent,
+} from '@keenmate/svelte-treeview-canvas';
+
+// Override only badge, keep other defaults
+<CanvasTree
+  renderBadgeCallback={(rctx) => {
+    // Custom badge: show status icon instead of count
+    const { ctx, node, bounds, theme } = rctx;
+    const status = node.data?.status;
+    if (!status) return;
+    ctx.fillText(status === 'active' ? '●' : '○', bounds.x + bounds.w - 20, bounds.cy);
+  }}
+  ...
+/>
+
+TOOLTIP SNIPPET
+----------------
+DOM-based tooltip over hovered nodes:
+
+<CanvasTree ...>
+  {#snippet tooltipSnippet(node, path)}
+    <div class="tooltip">
+      <strong>{node.data?.name}</strong>
+      <p>{node.data?.description}</p>
+    </div>
+  {/snippet}
+</CanvasTree>
+
+CUT NODE RENDERING
+-------------------
+When enableClipboard is true and nodes are cut (via Ctrl+X):
+- Cut nodes render at 40% opacity (globalAlpha = 0.4)
+- Applies to all LOD levels (full, medium, simple)
+- Controlled by TreeController.cutPaths set
+
+SEARCH RESULT RENDERING
+-------------------------
+When search is active:
+- Non-matching nodes: dimmed (25% opacity)
+- Matching nodes: highlighted with nodeMatchBg/nodeMatchBorder
+- Current result: highlighted with nodeCurrentBg/nodeCurrentBorder

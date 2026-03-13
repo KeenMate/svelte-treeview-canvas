@@ -1,0 +1,164 @@
+DOCUMENTATION INDEX
+===================
+
+Quick reference for @keenmate/svelte-treeview-canvas documentation.
+
+FILE OVERVIEW
+-------------
+basic-setup.txt          - Installation, quick start, layout modes, growth direction
+props-reference.txt      - Complete CanvasTree props list with types and defaults
+theming.txt              - CanvasTheme interface, CSS variables, depth colors, presets
+rendering.txt            - Custom render callbacks, LOD levels, render context API
+navigation.txt           - Keyboard navigation, spatial nav, balanced/fishbone handling
+interaction.txt          - Click behavior, multi-select, drag-drop, clipboard, context menus
+typescript-types.txt     - All exported types and interfaces
+
+KEYWORD INDEX
+=============
+
+A
+-
+autoFocusOnSelect → interaction.txt, props-reference.txt
+
+B
+-
+balanced layout → basic-setup.txt, navigation.txt
+balancedSplit → props-reference.txt
+box layout → basic-setup.txt
+
+C
+-
+CanvasTheme → theming.txt
+CanvasTree → basic-setup.txt
+clickBehavior → interaction.txt, props-reference.txt
+clipboard → interaction.txt
+colorBarWidth → theming.txt, props-reference.txt
+columnGap → props-reference.txt
+context menu → interaction.txt
+CSS variables → theming.txt
+
+D
+-
+depthColors → theming.txt, props-reference.txt
+drag and drop → interaction.txt
+drawTime → props-reference.txt
+
+E
+-
+enableClipboard → interaction.txt, props-reference.txt
+
+F
+-
+fishbone layout → basic-setup.txt, navigation.txt
+focusOnPath → interaction.txt
+focusOnNode → interaction.txt
+FocusOptions → typescript-types.txt
+fontFamily → theming.txt, props-reference.txt
+fontSize → theming.txt, props-reference.txt
+
+G
+-
+getCanvasContextMenuItemsCallback → interaction.txt
+getGroupContextMenuItemsCallback → interaction.txt
+getNodeContextMenuItemsCallback → interaction.txt
+gridGap → props-reference.txt
+groupPadding → props-reference.txt
+groupSiblings → props-reference.txt
+growthDirection → basic-setup.txt, props-reference.txt
+
+I
+-
+initialViewport → props-reference.txt
+
+L
+-
+layoutMode → basic-setup.txt, props-reference.txt
+layoutTime → props-reference.txt
+levelConfig → props-reference.txt, theming.txt
+LOD → rendering.txt
+
+M
+-
+maxGridCols → props-reference.txt
+measureNodeHeightCallback → rendering.txt
+measureNodeWidthCallback → rendering.txt
+minimap → theming.txt
+multi-select → interaction.txt
+
+N
+-
+navigationOverrides → navigation.txt, props-reference.txt
+nodeGap → props-reference.txt
+nodeHeight → props-reference.txt
+nodeMaxWidth → props-reference.txt
+nodeMinWidth → props-reference.txt
+nodePaddingX → props-reference.txt
+
+O
+-
+onNodeClick → interaction.txt, props-reference.txt
+onNodeDrop → interaction.txt
+onPaste → interaction.txt
+onSelectionChange → interaction.txt
+
+R
+-
+radial layout → basic-setup.txt
+rangeSelectionMode → interaction.txt, props-reference.txt
+renderBackgroundCallback → rendering.txt
+renderBadgeCallback → rendering.txt
+renderBodyCallback → rendering.txt
+renderChevronCallback → rendering.txt
+renderNodeCallback → rendering.txt
+
+S
+-
+selectedPath → interaction.txt, props-reference.txt
+selectedPaths → interaction.txt, props-reference.txt
+selectionRectangle → interaction.txt
+showDotGrid → props-reference.txt
+sunburst layout → basic-setup.txt
+
+T
+-
+theme → theming.txt, props-reference.txt
+tooltipSnippet → props-reference.txt, rendering.txt
+tree layout → basic-setup.txt
+TreeNavigation → navigation.txt
+truncateText → rendering.txt
+
+Z
+-
+zoomLodText → rendering.txt, props-reference.txt
+zoomLodSimple → rendering.txt, props-reference.txt
+zoomToFit → interaction.txt
+
+COMMON QUESTIONS
+================
+
+Q: How do I get started with canvas tree?
+A: -> basic-setup.txt
+
+Q: What layout modes are available?
+A: -> basic-setup.txt (tree, balanced, fishbone, radial, box, sunburst)
+
+Q: How do I customize node appearance?
+A: -> rendering.txt (render callbacks), theming.txt (colors/fonts)
+
+Q: How do I change colors and theme?
+A: -> theming.txt (CanvasTheme, CSS variables)
+
+Q: How do I enable multi-select?
+A: -> interaction.txt (Ctrl+click, Shift+click, Shift+drag)
+
+Q: How do I add right-click context menus?
+A: -> interaction.txt (getNodeContextMenuItemsCallback)
+
+Q: How do I enable copy/cut/paste?
+A: -> interaction.txt (enableClipboard)
+
+Q: How does keyboard navigation work?
+A: -> navigation.txt
+
+Q: What are all the available props?
+A: -> props-reference.txt

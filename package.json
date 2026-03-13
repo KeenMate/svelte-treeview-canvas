@@ -21,6 +21,7 @@
 		"!dist/**/*.test.*",
 		"!dist/**/*.spec.*",
 		"!dist/demo",
+		"ai",
 		"CHANGELOG.md"
 	],
 	"svelte": "./dist/index.js",

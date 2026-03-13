@@ -1,0 +1,126 @@
+PROPS REFERENCE
+===============
+
+Complete list of CanvasTree props with types and defaults.
+
+DATA PROPS (passed to TreeController)
+--------------------------------------
+data: T[]                          — REQUIRED. Flat array of tree items.
+idMember: string                   — REQUIRED. Property name for unique ID.
+pathMember: string                 — REQUIRED. Property name for hierarchical path.
+sortCallback: (items) => items     — REQUIRED. Sort function for siblings.
+isSorted?: boolean                 — Data is pre-sorted (skip sort step).
+expandLevel?: number               — Initial expand depth (default: 2).
+parentPathMember?: string          — Property for parent path.
+levelMember?: string               — Property for depth level.
+hasChildrenMember?: string         — Property for has-children flag.
+displayValueMember?: string        — Property for display text.
+getDisplayValueCallback?: (node) => string
+searchValueMember?: string         — Property for search text.
+getSearchValueCallback?: (node) => string
+treePathSeparator?: string         — Path separator (default: ".").
+dragDropMode?: 'none'|'self'|'cross'|'both'
+shouldUseInternalSearchIndex?: boolean
+rangeSelectionMode?: 'visual'|'logical' — Multi-select range mode.
+isExpandedMember?: string
+isDraggableMember?: string
+getIsDraggableCallback?: (node) => boolean
+isDropAllowedMember?: string
+allowedDropPositionsMember?: string
+getAllowedDropPositionsCallback?: (node) => DropPosition[]|null
+isCollapsibleMember?: string
+getIsCollapsibleCallback?: (node) => boolean
+orderMember?: string
+
+CANVAS VISUAL PROPS
+--------------------
+layoutMode?: LayoutMode             — 'tree'|'balanced'|'fishbone'|'radial'|'box'|'sunburst' (default: 'tree'). Bindable.
+growthDirection?: GrowthDirection    — 'right'|'left'|'down'|'up' (default: 'right'). Bindable.
+initialViewport?: InitialViewport   — 'root'|'origin' (default: 'root').
+balancedSplit?: 'even'|'weighted'   — How to split children in balanced mode (default: 'even').
+fishboneCrossNav?: boolean          — Enable cross-side navigation in fishbone (default: false).
+radialStartAngle?: number           — Starting angle for radial layout (default: 0).
+radialSpacing?: number              — Spacing between radial nodes.
+sunburstRingWidth?: number          — Ring width for sunburst layout (default: 100).
+sunburstRootTitle?: string          — Center label for sunburst.
+groupSiblings?: boolean             — Group siblings in boxes (default: true). Bindable.
+showDotGrid?: boolean               — Show background dot grid (default: false). Bindable.
+clickBehavior?: ClickBehavior       — 'select'|'expand'|'expand-and-focus' (default: 'expand-and-focus'). Bindable.
+collapsible?: boolean               — Allow expand/collapse (default: true).
+
+NODE GEOMETRY PROPS (override theme)
+-------------------------------------
+All bindable. Override corresponding CanvasTheme values.
+
+nodeHeight?: number                 — Node height in px.
+nodeMinWidth?: number               — Minimum node width.
+nodeMaxWidth?: number               — Maximum node width (0 = unlimited).
+nodePaddingX?: number               — Horizontal padding inside node.
+nodeGap?: number                    — Vertical gap between siblings.
+columnGap?: number                  — Horizontal gap between depth columns.
+levelSpacingV?: number              — Vertical spacing for level separators.
+colorBarWidth?: number              — Width of depth color bar.
+depthColors?: string[]              — 10-color palette for depth levels.
+fontSize?: number                   — Base font size.
+fontFamily?: string                 — Font family string.
+
+GRID/LOD PROPS
+--------------
+zoomLodText?: number                — Zoom threshold for text LOD (default: 0.35). Bindable.
+zoomLodSimple?: number              — Zoom threshold for simple LOD (default: 0.12). Bindable.
+gridGap?: number                    — Gap in box grid layout (default: 4). Bindable.
+groupPadding?: number               — Padding inside group boxes (default: 8). Bindable.
+maxGridCols?: number                — Max columns in box grid (default: 10). Bindable.
+gridNodeMaxW?: number               — Max node width in grid (default: 260). Bindable.
+levelConfig?: CanvasLevelConfig[]   — Per-level overrides (height, width, gap, color).
+
+RENDER CALLBACKS
+-----------------
+renderNodeCallback                  — Override entire node rendering.
+renderBackgroundCallback            — Override node background slot.
+renderColorBarCallback              — Override color bar slot.
+renderBodyCallback                  — Override body/label slot.
+renderChevronCallback               — Override expand/collapse chevron slot.
+renderBadgeCallback                 — Override badge slot.
+measureNodeWidthCallback            — Custom node width calculation.
+measureNodeHeightCallback           — Custom node height calculation.
+getNodeLabelCallback                — Resolve node label text.
+getBadgeContentCallback             — Resolve badge content (e.g. child count).
+
+BINDABLE STATE
+--------------
+selectedPath?: string|null          — Currently selected node path.
+selectedPaths?: Set<string>         — All selected node paths (multi-select).
+controller?: TreeController<T>|null — TreeController reference.
+
+EVENTS
+------
+onNodeClick?: (node) => void
+onSelectionChange?: (paths, nodes) => void
+onNodeDrop?: (source, target, position) => void
+
+CONTEXT MENU CALLBACKS (return data)
+-------------------------------------
+getNodeContextMenuItemsCallback?: (node, selectedNodes?) => ContextMenuEntry[]
+getGroupContextMenuItemsCallback?: (parentNode, childNodes) => ContextMenuEntry[]
+getCanvasContextMenuItemsCallback?: () => ContextMenuEntry[]
+
+METRICS (bindable, read-only)
+------------------------------
+layoutTime?: number                 — Last layout computation time (ms).
+drawTime?: number                   — Last draw time (ms).
+visibleCount?: number               — Visible node count.
+totalCount?: number                 — Total node count.
+
+UI/BEHAVIOR
+-----------
+tooltipSnippet?: Snippet            — Custom tooltip content snippet.
+theme?: Partial<CanvasTheme>        — Theme overrides (highest priority).
+navigationOverrides?: TreeNavigationOverrides<T> — Override individual nav methods.
+autoFocusOnSelect?: boolean         — Auto-pan to selected node + scroll page (default: false).
+
+CLIPBOARD
+---------
+enableClipboard?: boolean           — Enable Ctrl+C/X/V shortcuts (default: false).
+transformDataForPaste?: (data, index, operation) => T — Transform data before paste.
+onPaste?: (result) => void          — Callback after paste operation.

@@ -1,0 +1,129 @@
+NAVIGATION
+==========
+
+Spatial keyboard navigation based on node positions in the canvas layout.
+
+BUILT-IN KEYBOARD SHORTCUTS
+-----------------------------
+Arrow keys:   Navigate between nodes (direction-aware per layout)
+Home:         Jump to first visible node
+End:          Jump to last visible node
+Space/Enter:  Toggle expand/collapse
+Backspace:    Collapse parent and navigate to it
+
+The canvas must be focused to receive keyboard events (click canvas first).
+
+DIRECTION MAPPING
+------------------
+Arrow keys map to logical actions based on growthDirection:
+
+Growth "right" (default):
+  ArrowRight → into children (treeForward)
+  ArrowLeft  → to parent (treeBack)
+  ArrowDown  → next sibling (crossNext)
+  ArrowUp    → previous sibling (crossPrev)
+
+Growth "left":
+  ArrowLeft  → into children
+  ArrowRight → to parent
+  ArrowDown/Up → siblings
+
+Growth "down":
+  ArrowDown  → into children
+  ArrowUp    → to parent
+  ArrowRight/Left → siblings
+
+Growth "up": (inverted from "down")
+
+BALANCED LAYOUT NAVIGATION
+----------------------------
+Balanced mode splits children into left and right arms around the root.
+
+At root node:
+  ArrowRight → enter right arm (closest child by Y)
+  ArrowLeft  → enter left arm (closest child by Y)
+  ArrowUp/Down → no-op (root has no siblings)
+
+On left arm: directions are INVERTED from base direction
+  ArrowLeft  → into children (deeper into left arm)
+  ArrowRight → to parent (toward root)
+  ArrowUp/Down → siblings within same arm
+
+On right arm: standard right-growth mapping
+  ArrowRight → into children
+  ArrowLeft  → to parent
+  ArrowUp/Down → siblings within same arm
+
+Arm detection: based on node X position relative to root's X position.
+Siblings are constrained to same arm — no cross-arm navigation via Up/Down.
+
+FISHBONE LAYOUT NAVIGATION
+----------------------------
+Fishbone has a horizontal spine with branches above/below.
+
+At root: only spine-forward key enters children.
+At spine nodes (depth 1): spine keys navigate between spine siblings,
+  branch keys enter children or cross to opposite side.
+At branch nodes (depth 2+): standard navigation, with optional
+  cross-side navigation (fishboneCrossNav prop).
+
+SPATIAL NAVIGATION INTERNALS
+------------------------------
+Navigation uses findNearest() — Euclidean distance to closest node
+on the correct axis and direction. Group boxes constrain navigation
+to siblings within the same box first.
+
+navNextSibling / navPrevSibling: Find nearest same-depth node on cross axis.
+navInto: Find first child (expand if collapsed). Balanced root → right arm.
+navOut: Navigate to parent path.
+navBackOut: Collapse parent, then navigate to it.
+navFirst/navLast: Closest node to min/max coordinates.
+
+NAVIGATION OVERRIDES
+---------------------
+Override individual navigation methods:
+
+<CanvasTree
+  navigationOverrides={{
+    navInto: () => {
+      // Custom enter-children logic
+      // e.g., skip to specific child instead of first
+    },
+    // All other methods use default spatial nav
+  }}
+  ...
+/>
+
+Available override methods:
+  navTo(path), navNextSibling(), navPrevSibling(),
+  navInto(), navOut(), navBackOut(),
+  navToggle(), navFirst(), navLast()
+
+AUTO-FOCUS ON SELECT
+---------------------
+autoFocusOnSelect={true}
+
+When selectedPath changes (e.g., programmatically or via binding):
+1. Internal canvas viewport pans to show the selected node
+2. Browser page scrolls to make the canvas container visible
+   (uses scrollIntoView({ block: 'nearest' }) — no jump if already visible)
+
+Does NOT trigger on regular click/keyboard nav (user is already looking at canvas).
+
+TREENAVIGATION INTERFACE
+--------------------------
+import type { TreeNavigation, TreeNavigationOverrides } from '@keenmate/svelte-treeview';
+
+interface TreeNavigation<T> {
+  navTo(path: string): void;
+  navNextSibling(): void;
+  navPrevSibling(): void;
+  navInto(): void;
+  navOut(): void;
+  navBackOut(): void;
+  navToggle(): void;
+  navFirst(): void;
+  navLast(): void;
+}
+
+type TreeNavigationOverrides<T> = Partial<TreeNavigation<T>>;

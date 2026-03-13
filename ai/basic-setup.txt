@@ -1,0 +1,146 @@
+BASIC SETUP
+===========
+
+CRITICAL: Canvas rendering plugin for @keenmate/svelte-treeview
+- Requires both packages installed
+- Peer dependency on @keenmate/svelte-treeview ^5.0.0
+- Svelte 5 only (uses runes)
+
+INSTALLATION
+------------
+npm install @keenmate/svelte-treeview @keenmate/svelte-treeview-canvas
+
+Both packages required. Core handles tree data/logic, this package renders on canvas.
+
+QUICK START
+-----------
+<script lang="ts">
+  import { CanvasTree } from '@keenmate/svelte-treeview-canvas';
+  import type { LTreeNode } from '@keenmate/svelte-treeview';
+
+  const data = [
+    { id: 1, path: '1', name: 'Root', hasChildren: true },
+    { id: 2, path: '1.1', name: 'Child A', hasChildren: false },
+    { id: 3, path: '1.2', name: 'Child B', hasChildren: false },
+  ];
+
+  function sortByName(items: LTreeNode<any>[]) {
+    return [...items].sort((a, b) =>
+      (a.data?.name || '').localeCompare(b.data?.name || '')
+    );
+  }
+</script>
+
+<div style="height: 500px;">
+  <CanvasTree
+    {data}
+    idMember="id"
+    pathMember="path"
+    sortCallback={sortByName}
+    isSorted={true}
+    expandLevel={3}
+    getNodeLabelCallback={(node) => node.data?.name || node.path}
+  />
+</div>
+
+IMPORTANT: The CanvasTree fills its container. Wrap it in a div with explicit height.
+
+LAYOUT MODES
+-------------
+layoutMode prop — controls tree arrangement:
+
+| Mode       | Description                                              |
+|------------|----------------------------------------------------------|
+| tree       | Standard hierarchical tree (default)                     |
+| balanced   | Root centered, children split left/right arms            |
+| fishbone   | Spine with alternating branches above/below              |
+| radial     | Circular layout, root at center                          |
+| box        | Grid of children within group boxes                      |
+| sunburst   | Concentric rings radiating from center                   |
+
+<CanvasTree layoutMode="balanced" ... />
+
+GROWTH DIRECTION
+----------------
+growthDirection prop — which way the tree grows:
+
+| Direction | Tree grows toward |
+|-----------|-------------------|
+| right     | Right (default)   |
+| left      | Left              |
+| down      | Downward          |
+| up        | Upward            |
+
+<CanvasTree growthDirection="down" ... />
+
+Note: Balanced layout ignores growthDirection (always horizontal with left/right arms).
+
+INITIAL VIEWPORT
+-----------------
+initialViewport prop — where to center on load:
+
+| Value  | Behavior                  |
+|--------|---------------------------|
+| root   | Center on root node       |
+| origin | Center at canvas origin   |
+
+INTERACTIONS
+-----------
+Built-in:
+- Pan: click and drag canvas
+- Zoom: mouse wheel / pinch
+- Click node: expand/select (depends on clickBehavior)
+- Right-click: context menu
+- Arrow keys: spatial navigation (when canvas focused)
+- Home/End: first/last node
+- Space/Enter: toggle expand
+- Backspace: collapse parent and go to it
+
+MINIMAP
+-------
+Always-visible overview in corner with viewport indicator. Click/drag minimap to navigate.
+
+DOT GRID
+--------
+<CanvasTree showDotGrid={true} ... />
+
+Optional background grid for visual reference.
+
+GROUP SIBLINGS
+--------------
+<CanvasTree groupSiblings={true} ... />
+
+Groups sibling nodes into visual boxes (default: true).
+
+SEARCH INTEGRATION
+------------------
+Use TreeController for search:
+
+<script>
+  let ctrlRef;
+  let searchText = $state('');
+
+  function search() {
+    ctrlRef?.searchNodes(searchText);
+  }
+</script>
+
+<CanvasTree bind:controller={ctrlRef} ... />
+<input bind:value={searchText} oninput={search} />
+
+Non-matching nodes are dimmed. Matching nodes are highlighted.
+Use canvasTreeRef.nextResult() / prevResult() to navigate between results.
+
+COMPACT MODE (Prop Overrides)
+------------------------------
+Override geometry for compact display:
+
+<CanvasTree
+  nodeHeight={32}
+  nodeGap={4}
+  columnGap={30}
+  fontSize={11}
+  ...
+/>
+
+All geometry props override theme values. See props-reference.txt for full list.

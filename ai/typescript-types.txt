@@ -1,0 +1,200 @@
+TYPESCRIPT TYPES
+================
+
+All exported types from @keenmate/svelte-treeview-canvas.
+
+IMPORTS
+-------
+import { CanvasTree } from '@keenmate/svelte-treeview-canvas';
+import type {
+  // Canvas types
+  CanvasRenderContext,
+  CanvasNodeBounds,
+  CanvasNodeState,
+  CanvasVisualConfig,
+  CanvasLevelConfig,
+  CanvasTheme,
+
+  // Render callbacks
+  RenderNodeCallback,
+  RenderSlotCallback,
+  MeasureNodeWidthCallback,
+  MeasureNodeHeightCallback,
+  GetNodeLabelCallback,
+  GetBadgeContentCallback,
+
+  // Enums/unions
+  LodLevel,
+  Orientation,
+  GrowthDirection,
+  LayoutMode,
+  ClickBehavior,
+  InitialViewport,
+
+  // Layout
+  LayoutNode,
+  GroupBox,
+  NodeRenderSlots,
+
+  // Focus
+  FocusAnchor,
+  FocusZoom,
+  FocusOptions,
+} from '@keenmate/svelte-treeview-canvas';
+
+// Re-exported from core
+import type {
+  LTreeNode,
+  DropPosition,
+  ContextMenuItem,
+  ContextMenuDivider,
+  ContextMenuEntry,
+  TreeNavigation,
+  TreeNavigationOverrides,
+  TreeControllerProps,
+} from '@keenmate/svelte-treeview-canvas';
+
+import { TreeController } from '@keenmate/svelte-treeview-canvas';
+
+LAYOUT TYPES
+-----------
+type LayoutMode = 'tree' | 'balanced' | 'fishbone' | 'radial' | 'box' | 'sunburst';
+type GrowthDirection = 'right' | 'left' | 'down' | 'up';
+type Orientation = 'horizontal' | 'vertical';
+type ClickBehavior = 'select' | 'expand' | 'expand-and-focus';
+type InitialViewport = 'root' | 'origin';
+type LodLevel = 'simple' | 'medium' | 'full';
+
+RENDER CONTEXT
+--------------
+interface CanvasRenderContext<T> {
+  ctx: CanvasRenderingContext2D;
+  node: LTreeNode<T>;
+  label: string;
+  badgeContent: string | null;
+  bounds: CanvasNodeBounds;
+  state: CanvasNodeState;
+  lod: LodLevel;
+  depthColor: string;
+  config: CanvasVisualConfig;
+  theme: CanvasTheme;
+}
+
+interface CanvasNodeBounds {
+  x: number; y: number;
+  w: number; h: number;
+  cx: number; cy: number;
+  depth: number;
+}
+
+interface CanvasNodeState {
+  isSelected: boolean;
+  isHovered: boolean;
+  isDragSource: boolean;
+  isDropTarget: boolean;
+  isSearchMatch: boolean;
+  isCurrentSearchResult: boolean;
+  isSearchDimmed: boolean;
+}
+
+CALLBACK TYPES
+--------------
+type RenderNodeCallback<T> = (rctx: CanvasRenderContext<T>) => void;
+type RenderSlotCallback<T> = (rctx: CanvasRenderContext<T>) => void;
+type MeasureNodeWidthCallback<T> = (
+  ctx: CanvasRenderingContext2D,
+  node: LTreeNode<T>,
+  config: CanvasVisualConfig
+) => number;
+type MeasureNodeHeightCallback<T> = (
+  ctx: CanvasRenderingContext2D,
+  node: LTreeNode<T>,
+  config: CanvasVisualConfig
+) => number;
+type GetNodeLabelCallback<T> = (node: LTreeNode<T>) => string;
+type GetBadgeContentCallback<T> = (node: LTreeNode<T>) => string | null;
+
+FOCUS TYPES
+-----------
+type FocusAnchor =
+  | 'center' | 'top-left' | 'top-center' | 'top-right'
+  | 'center-left' | 'center-right'
+  | 'bottom-left' | 'bottom-center' | 'bottom-right'
+  | { x: number; y: number };
+
+type FocusZoom = number | 'keep' | 'auto';
+
+interface FocusOptions {
+  anchor?: FocusAnchor;
+  zoom?: FocusZoom;
+  padding?: number;
+  animate?: boolean;
+  select?: boolean;
+}
+
+LAYOUT NODE
+-----------
+interface LayoutNode<T> {
+  node: LTreeNode<T>;
+  x: number; y: number;
+  w: number; h: number;
+  cx: number; cy: number;
+  depth: number;
+  children?: LayoutNode<T>[];
+  parent?: LayoutNode<T>;
+}
+
+GROUP BOX
+---------
+interface GroupBox {
+  x: number; y: number;
+  w: number; h: number;
+  parentPath: string;
+}
+
+LEVEL CONFIG
+------------
+interface CanvasLevelConfig {
+  height?: number;
+  minWidth?: number;
+  maxWidth?: number;
+  gap?: number;
+  color?: string;
+}
+
+CONTEXT MENU (from core)
+-------------------------
+interface ContextMenuItem {
+  id?: string;
+  label: string;
+  icon?: string;
+  shortcut?: string;
+  isDisabled?: boolean;
+  isVisible?: boolean;
+  className?: string;
+  onclick?: () => void | Promise<void>;
+  children?: ContextMenuEntry[];
+}
+
+interface ContextMenuDivider {
+  divider: true;
+  label?: string;
+}
+
+type ContextMenuEntry = ContextMenuItem | ContextMenuDivider;
+
+NAVIGATION (from core)
+-----------------------
+interface TreeNavigation<T> {
+  navTo(path: string): void;
+  navNextSibling(): void;
+  navPrevSibling(): void;
+  navInto(): void;
+  navOut(): void;
+  navBackOut(): void;
+  navToggle(): void;
+  navFirst(): void;
+  navLast(): void;
+}
+
+type TreeNavigationOverrides<T> = Partial<TreeNavigation<T>>;

@@ -1,0 +1,162 @@
+INTERACTION
+===========
+
+Click behavior, multi-select, drag-drop, clipboard, and context menus.
+
+CLICK BEHAVIOR
+---------------
+clickBehavior prop controls what happens when clicking a node:
+
+| Mode             | Single click          | Double click         |
+|------------------|-----------------------|----------------------|
+| select           | Select only           | Expand/collapse      |
+| expand           | Expand/collapse       | —                    |
+| expand-and-focus | Expand + pan to node  | —                    |
+
+"select" mode is ideal for multi-select workflows (single click = select,
+double click = expand).
+
+MULTI-SELECT
+-------------
+Built-in multi-select interactions:
+
+Ctrl+click (Cmd on Mac):  Toggle node in/out of selection
+Shift+click:              Range select (anchor to target)
+Shift+drag (empty space): Draw selection rectangle
+Ctrl+Shift+drag:          Additive rectangle selection
+Plain click:              Clear selection, select one
+
+Props:
+  selectedPaths: Set<string>         — Bindable set of selected paths
+  rangeSelectionMode: 'visual'|'logical'
+    visual:  2D bounding-box from canvas positions (default)
+    logical: depth-first tree order (includes collapsed children)
+  onSelectionChange: (paths, nodes) => void
+
+<CanvasTree
+  bind:selectedPaths
+  rangeSelectionMode="visual"
+  onSelectionChange={(paths, nodes) => console.log(`${paths.size} selected`)}
+  ...
+/>
+
+SELECTION RECTANGLE
+--------------------
+Shift+drag on empty canvas draws a dashed rectangle.
+Nodes inside are selected on mouse-up.
+Ctrl+Shift+drag adds to existing selection.
+
+Theme tokens: selectionRectFill, selectionRectStroke
+CSS variables: --ct-selection-rect-fill, --ct-selection-rect-stroke
+
+DRAG AND DROP
+--------------
+Canvas-native drag and drop with visual drop zone overlays.
+
+<CanvasTree
+  dragDropMode="self"
+  onNodeDrop={(source, target, position) => {
+    console.log(`Drop ${source.path} ${position} ${target.path}`);
+  }}
+  ...
+/>
+
+Drop positions: 'before' | 'after' | 'child'
+Visual indicators colored by theme: dzBefore, dzAfter, dzChild.
+
+CLIPBOARD
+----------
+enableClipboard={true} activates Ctrl+C/X/V keyboard shortcuts.
+
+Ctrl+C:  Copy selected nodes to clipboard
+Ctrl+X:  Cut selected nodes (dimmed at 40% opacity)
+Ctrl+V:  Paste under selected node as children
+Escape:  Cancel cut (removes dimming)
+
+Props:
+  enableClipboard: boolean            — Enable shortcuts (default: false)
+  transformDataForPaste: (data, index, operation) => T — Transform before paste
+  onPaste: (result) => void           — Callback after paste
+
+<CanvasTree
+  enableClipboard={true}
+  transformDataForPaste={(data, idx, op) => ({
+    ...data,
+    id: crypto.randomUUID(),
+    name: op === 'copy' ? `${data.name} (copy)` : data.name,
+  })}
+  onPaste={(result) => {
+    if (result.success) console.log(`Pasted ${result.count} nodes`);
+  }}
+  ...
+/>
+
+Uses TreeController clipboard API internally (copyNodes, cutNodes, pasteNodes).
+
+CONTEXT MENUS
+--------------
+4-level context menu system:
+
+1. Node menu: Right-click a node
+   getNodeContextMenuItemsCallback: (node, selectedNodes?) => ContextMenuEntry[]
+
+2. Selection menu: Right-click a node that's part of multi-selection
+   Same callback, selectedNodes parameter has all selected nodes
+
+3. Group menu: Right-click a group box
+   getGroupContextMenuItemsCallback: (parentNode, childNodes) => ContextMenuEntry[]
+
+4. Canvas menu: Right-click empty space
+   getCanvasContextMenuItemsCallback: () => ContextMenuEntry[]
+
+<CanvasTree
+  getNodeContextMenuItemsCallback={(node, selectedNodes) => [
+    { label: 'Edit', shortcut: 'F2', onclick: () => editNode(node) },
+    { divider: true },
+    { label: 'Delete', className: 'danger', onclick: () => deleteNode(node) },
+    ...(selectedNodes && selectedNodes.length > 1 ? [
+      { divider: true, label: 'Bulk' },
+      { label: `Export ${selectedNodes.length} nodes`, onclick: () => exportNodes(selectedNodes) },
+    ] : []),
+  ]}
+  getCanvasContextMenuItemsCallback={() => [
+    { label: 'Zoom to Fit', onclick: () => canvasTreeRef?.zoomToFit() },
+    { label: 'Expand All', onclick: () => ctrlRef?.expandAll() },
+    { label: 'Collapse All', onclick: () => ctrlRef?.collapseAll() },
+  ]}
+  ...
+/>
+
+Context menu types (from @keenmate/svelte-treeview):
+  ContextMenuItem: { label, icon?, shortcut?, onclick?, children?, isDisabled?, isVisible?, className? }
+  ContextMenuDivider: { divider: true, label? }
+  ContextMenuEntry: ContextMenuItem | ContextMenuDivider
+
+Keyboard shortcuts work when menu is open (e.g. pressing "F2" triggers Edit).
+
+FOCUS API
+----------
+Programmatic viewport control:
+
+canvasTreeRef.focusOnPath('1.2.3', {
+  anchor: 'center',        // FocusAnchor
+  zoom: 1.0,               // number | 'keep' | 'auto'
+  padding: 50,             // px padding around node
+  animate: true,           // smooth animation
+  select: true,            // also select the node
+});
+
+canvasTreeRef.focusOnNode(node, options);
+canvasTreeRef.zoomToFit();
+
+FocusAnchor values:
+  'center', 'top-left', 'top-center', 'top-right',
+  'center-left', 'center-right',
+  'bottom-left', 'bottom-center', 'bottom-right',
+  { x: number, y: number }
+
+SEARCH RESULT NAVIGATION
+--------------------------
+canvasTreeRef.nextResult();
+canvasTreeRef.prevResult();
+const { currentIndex, total } = canvasTreeRef.getSearchResults();
