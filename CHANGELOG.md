@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+- **`ClickBehavior` type**: Now imported from `@keenmate/svelte-treeview` instead of locally defined. No API change — the type and values (`'select'` | `'expand'` | `'expand-and-focus'`) remain identical. Requires `@keenmate/svelte-treeview` >= 5.0.0-rc05.
+
 ## [1.0.0-rc02] - 2026-03-12
 
 ### Added

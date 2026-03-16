@@ -6,6 +6,7 @@ This package was originally part of `@keenmate/svelte-treeview` but has been ext
 
 ## What's New in v1.0.0-rc02
 
+- **`ClickBehavior` type shared with core**: `ClickBehavior` (`'select'` | `'expand'` | `'expand-and-focus'`) is now imported from `@keenmate/svelte-treeview` — single source of truth for both packages.
 - **Multi-select**: Ctrl+click toggle, Shift+click range, Shift+drag rectangle selection. Visual (2D bounding-box) and logical (tree-order) range modes.
 - **4-level context menu**: Node, selection, group box, and canvas-level menus with icons, shortcuts, submenus, and dividers.
 - **Spatial keyboard navigation**: Full arrow-key nav based on node positions, with correct handling for balanced and fishbone layouts. `navigationOverrides` prop for custom overrides.

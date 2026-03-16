@@ -1,10 +1,10 @@
 import type { LTreeNode } from '@keenmate/svelte-treeview';
-import type { DropPosition, ContextMenuItem, ContextMenuDivider, ContextMenuEntry } from '@keenmate/svelte-treeview';
+import type { DropPosition, ClickBehavior, ContextMenuItem, ContextMenuDivider, ContextMenuEntry } from '@keenmate/svelte-treeview';
 import type { TreeController, TreeControllerProps } from '@keenmate/svelte-treeview';
 import type { CanvasTheme } from './canvas-theme.js';
 
 // Re-export for convenience
-export type { LTreeNode, DropPosition, ContextMenuItem, ContextMenuDivider, ContextMenuEntry, TreeController, TreeControllerProps };
+export type { LTreeNode, DropPosition, ClickBehavior, ContextMenuItem, ContextMenuDivider, ContextMenuEntry, TreeController, TreeControllerProps };
 
 // ── LOD ──────────────────────────────────────────────────────────────────
 
@@ -104,7 +104,6 @@ export interface LayoutConfig {
 export type Orientation = 'horizontal' | 'vertical';
 export type GrowthDirection = 'right' | 'left' | 'down' | 'up';
 export type LayoutMode = 'tree' | 'balanced' | 'fishbone' | 'radial' | 'box' | 'sunburst';
-export type ClickBehavior = 'select' | 'expand' | 'expand-and-focus';
 export type InitialViewport = 'root' | 'origin';
 
 // ── Render Context & Callbacks ───────────────────────────────────────────
