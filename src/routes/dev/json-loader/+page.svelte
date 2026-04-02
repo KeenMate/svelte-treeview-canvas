@@ -1983,7 +1983,7 @@
 							shouldUseInternalSearchIndex={true}
 							searchValueMember={displayMember || undefined}
 							displayValueMember={displayMember || undefined}
-							bind:selectedNode
+							bind:focusedNode={selectedNode}
 							bind:insertResult
 						>
 							{#snippet nodeTemplate(node: any)}

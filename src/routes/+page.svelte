@@ -1,9 +1,15 @@
 <script>
 	import { onMount } from 'svelte';
 
-	const version = 'v1.0.0-rc02';
+	const version = 'v1.0.0-rc03';
 
 	const examples = [
+		{
+			href: '/examples/interaction',
+			icon: '🖱️',
+			title: 'Interaction',
+			description: 'Click behavior modes, multi-select with Ctrl/Shift+click, rectangle selection, and keyboard navigation.'
+		},
 		{
 			href: '/examples/canvas-dendrogram',
 			icon: '🖼️',

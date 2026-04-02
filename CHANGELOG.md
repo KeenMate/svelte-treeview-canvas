@@ -7,8 +7,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.0.0-rc03] - 2026-03-31
+
+### Added
+- **Shift+Arrow/Home/End/PageUp/PageDown keyboard highlight**: Extends highlight selection via keyboard, delegating to core's `navHighlightNext`/`navHighlightPrev`/`navHighlightFirst`/`navHighlightLast`/`navHighlightPageDown`/`navHighlightPageUp`.
+- **PageUp/PageDown navigation**: Jumps 10 visible nodes forward/back.
+- **Interaction example page** (`/examples/interaction`): Interactive demo for click behavior, Ctrl+click / Shift+click multi-select, keyboard navigation, and selection state display (focused node, highlighted paths).
+
 ### Changed
-- **`ClickBehavior` type**: Now imported from `@keenmate/svelte-treeview` instead of locally defined. No API change — the type and values (`'select'` | `'expand'` | `'expand-and-focus'`) remain identical. Requires `@keenmate/svelte-treeview` >= 5.0.0-rc05.
+- **`ClickBehavior` type**: Now imported from `@keenmate/svelte-treeview` instead of locally defined. Requires `@keenmate/svelte-treeview` >= 5.0.0-rc05.
+- **Selection state reads `highlightedPaths` from controller**: Canvas draw, minimap, and context menu now read `ctrlRef.highlightedPaths` instead of local `selectedPaths` for visual highlight. This aligns with the core's three-level selection model (`focusedNode` / `highlightedPaths` / `selectedPaths`).
+- **`deselectAll()` → `clearHighlight()`**: Empty-space click now calls `clearHighlight()` to clear UI highlights without affecting checkbox state.
+- **`selectedNode` → `focusedNode`**: Internal references updated to match core API rename.
+- **`lastSelectedPath` → `lastHighlightedPath`**: Internal references updated.
+
+### Fixed
+- **Highlighted nodes not visually updating on keyboard navigation**: Added `$effect` to sync `ctrlRef.highlightedPaths` → local `selectedPaths` bindable and trigger canvas redraw.
 
 ## [1.0.0-rc02] - 2026-03-12
 

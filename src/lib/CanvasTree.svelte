@@ -588,7 +588,7 @@
 				visible++;
 
 				const depthColor = getDepthColor(n.depth);
-				const isSelected = selectedPaths.has(n.node.path) || n.node.path === selectedPath;
+				const isSelected = (ctrlRef ? ctrlRef.highlightedPaths.has(n.node.path) : selectedPaths.has(n.node.path)) || n.node.path === selectedPath;
 				const isMatch = isSearchActive && matchedPaths.has(n.node.path);
 				const isCurrent = isMatch && currentResultIndex >= 0 && searchResults[currentResultIndex]?.path === n.node.path;
 				const isDragSrc = iState.dragSrcNode?.node.path === n.node.path && iState.isDragging;
@@ -677,7 +677,7 @@
 			ctx.restore();
 		}
 
-		// Minimap — pass selectedPaths for multi-select highlight
+		// Minimap — pass highlightedPaths for multi-select highlight
 		const tMm0 = performance.now();
 		drawMinimap(
 			ctx, layoutNodes, groupBoxes,
@@ -686,7 +686,7 @@
 			iState.panX, iState.panY, iState.zoom,
 			cw, ch,
 			theme,
-			selectedPaths
+			ctrlRef ? ctrlRef.highlightedPaths : selectedPaths
 		);
 		const tMm1 = performance.now();
 
@@ -807,19 +807,19 @@
 			},
 			onContextMenu: (ln, clientX, clientY) => {
 				canvasMenuVisible = false;
-				const inSelection = selectedPaths.has(ln.node.path);
-				console.debug(`[CanvasTree] onContextMenu: ${ln.node.path}, inSelection=${inSelection}, selectedCount=${selectedPaths.size}`);
+				const inSelection = ctrlRef ? ctrlRef.highlightedPaths.has(ln.node.path) : selectedPaths.has(ln.node.path);
+				console.debug(`[CanvasTree] onContextMenu: ${ln.node.path}, inSelection=${inSelection}`);
 				// If right-clicking on an unselected node, clear multi-selection and select it
 				// Use direct state manipulation — NOT selectNode() which closes the context menu
 				if (!inSelection) {
 					console.debug(`[CanvasTree] onContextMenu: clearing selection, selecting only ${ln.node.path}`);
 					if (ctrlRef) {
-						ctrlRef.deselectAll();
+						ctrlRef.clearHighlight();
 						// Directly set selection state without going through _onNodeClicked
 						ln.node.isSelected = true;
 						ctrlRef.selectedPaths = new Set([ln.node.path]);
-						ctrlRef.selectedNode = ln.node;
-						ctrlRef.lastSelectedPath = ln.node.path;
+						ctrlRef.focusedNode = ln.node;
+						ctrlRef.lastHighlightedPath = ln.node.path;
 					}
 					selectedPaths = new Set([ln.node.path]);
 					selectedPath = ln.node.path;
@@ -866,8 +866,8 @@
 				if (!path) {
 					// Clicked empty space — deselect all
 					if (ctrlRef) {
-						ctrlRef.deselectAll();
-						selectedPaths = ctrlRef.selectedPaths;
+						ctrlRef.clearHighlight();
+						selectedPaths = ctrlRef.highlightedPaths;
 					} else {
 						selectedPaths = new Set();
 					}
@@ -880,13 +880,13 @@
 				const shift = modifiers?.shift ?? false;
 
 				if (ctrlRef) {
-					// Route all selection through TreeController so lastSelectedPath stays in sync
+					// Route all selection through TreeController so lastHighlightedPath stays in sync
 					if (ctrl) {
 						ctrlRef.selectNode(path, 'toggle');
 					} else if (shift) {
-						if (rangeSelectionMode === 'visual' && ctrlRef.lastSelectedPath) {
+						if (rangeSelectionMode === 'visual' && ctrlRef.lastHighlightedPath) {
 							// 2D bounding-box selection using canvas layout positions
-							const anchorPath = ctrlRef.lastSelectedPath;
+							const anchorPath = ctrlRef.lastHighlightedPath;
 							let anchorLn: LayoutNode<T> | null = null;
 							let targetLn: LayoutNode<T> | null = null;
 							for (const ln of layoutNodes) {
@@ -911,7 +911,7 @@
 								console.debug(`[multi-select] Visual 2D range: anchor=${anchorPath}, target=${path}, rect=[${minX.toFixed(0)},${minY.toFixed(0)} → ${maxX.toFixed(0)},${maxY.toFixed(0)}], hit ${hitPaths.length} nodes`);
 								ctrlRef.selectNodes(hitPaths);
 								// Preserve anchor for subsequent shift+clicks
-								ctrlRef.lastSelectedPath = anchorPath;
+								ctrlRef.lastHighlightedPath = anchorPath;
 							} else {
 								// Fallback: use controller's 1D range
 								ctrlRef.selectNode(path, 'range');
@@ -923,7 +923,7 @@
 					} else {
 						ctrlRef.selectNode(path, 'replace');
 					}
-					selectedPaths = ctrlRef.selectedPaths;
+					selectedPaths = ctrlRef.highlightedPaths;
 				} else {
 					// Fallback without controller
 					if (ctrl) {
@@ -941,8 +941,8 @@
 			onEmptyClick: () => {
 				// Click on empty canvas — deselect all
 				if (ctrlRef) {
-					ctrlRef.deselectAll();
-					selectedPaths = ctrlRef.selectedPaths;
+					ctrlRef.clearHighlight();
+					selectedPaths = ctrlRef.highlightedPaths;
 				} else {
 					selectedPaths = new Set();
 				}
@@ -1187,7 +1187,17 @@
 					return forward ? bPos - aPos : aPos - bPos;
 				});
 				navigateToPath(sorted[0].node.path);
-			}
+			},
+
+			// Shift+nav: delegate to controller's default range-highlight logic for now
+			navPageDown() { ctrlRef?.navPageDown(); },
+			navPageUp() { ctrlRef?.navPageUp(); },
+			navHighlightNext() { ctrlRef?.navHighlightNext(); },
+			navHighlightPrev() { ctrlRef?.navHighlightPrev(); },
+			navHighlightFirst() { ctrlRef?.navHighlightFirst(); },
+			navHighlightLast() { ctrlRef?.navHighlightLast(); },
+			navHighlightPageDown() { ctrlRef?.navHighlightPageDown(); },
+			navHighlightPageUp() { ctrlRef?.navHighlightPageUp(); }
 		};
 
 		return nav;
@@ -1610,16 +1620,27 @@
 			ctrlRef.navToggle();
 			return;
 		}
-		// Home: select first node
+		// Home: select first node (Shift: extend highlight)
 		if (e.key === 'Home') {
 			e.preventDefault();
-			ctrlRef.navFirst();
+			e.shiftKey ? ctrlRef.navHighlightFirst() : ctrlRef.navFirst();
 			return;
 		}
-		// End: select last node
+		// End: select last node (Shift: extend highlight)
 		if (e.key === 'End') {
 			e.preventDefault();
-			ctrlRef.navLast();
+			e.shiftKey ? ctrlRef.navHighlightLast() : ctrlRef.navLast();
+			return;
+		}
+		// PageDown/PageUp (Shift: extend highlight)
+		if (e.key === 'PageDown') {
+			e.preventDefault();
+			e.shiftKey ? ctrlRef.navHighlightPageDown() : ctrlRef.navPageDown();
+			return;
+		}
+		if (e.key === 'PageUp') {
+			e.preventDefault();
+			e.shiftKey ? ctrlRef.navHighlightPageUp() : ctrlRef.navPageUp();
 			return;
 		}
 		// Backspace: collapse parent + select it
@@ -1813,11 +1834,17 @@
 		if (!action) return;
 		e.preventDefault();
 
-		switch (action) {
-			case 'crossNext':   ctrlRef.navNextSibling(); break;
-			case 'crossPrev':   ctrlRef.navPrevSibling(); break;
-			case 'treeForward': ctrlRef.navInto(); break;
-			case 'treeBack':    ctrlRef.navOut(); break;
+		if (e.shiftKey && (action === 'crossNext' || action === 'crossPrev')) {
+			// Shift+cross arrow: extend highlight
+			if (action === 'crossNext') ctrlRef.navHighlightNext();
+			else ctrlRef.navHighlightPrev();
+		} else {
+			switch (action) {
+				case 'crossNext':   ctrlRef.navNextSibling(); break;
+				case 'crossPrev':   ctrlRef.navPrevSibling(); break;
+				case 'treeForward': ctrlRef.navInto(); break;
+				case 'treeBack':    ctrlRef.navOut(); break;
+			}
 		}
 	}
 
@@ -1879,6 +1906,14 @@
 			sunburstRingWidth, sunburstRootTitle];
 		console.log('[effect:relayout] triggered — changeTracker or config changed');
 		doLayout();
+		requestRedraw();
+	});
+
+	// Sync highlighted paths → local selectedPaths bindable + trigger redraw
+	$effect(() => {
+		if (!ctrlRef) return;
+		const hp = ctrlRef.highlightedPaths;
+		selectedPaths = hp;
 		requestRedraw();
 	});
 

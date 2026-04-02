@@ -4,9 +4,14 @@ Canvas 2D rendering plugin for [`@keenmate/svelte-treeview`](https://github.com/
 
 This package was originally part of `@keenmate/svelte-treeview` but has been extracted into its own package to separate concerns — the core package handles tree data, expand/collapse, search, drag & drop logic, while this package provides a high-performance canvas renderer on top of the same core. **You still need `@keenmate/svelte-treeview` installed** — it is a required peer dependency.
 
-## What's New in v1.0.0-rc02
+## What's New in v1.0.0-rc03
 
-- **`ClickBehavior` type shared with core**: `ClickBehavior` (`'select'` | `'expand'` | `'expand-and-focus'`) is now imported from `@keenmate/svelte-treeview` — single source of truth for both packages.
+- **Shift+keyboard highlight**: Shift+Arrow/Home/End/PageUp/PageDown extends highlight selection on canvas, matching file-manager behavior.
+- **Three-level selection alignment**: Canvas now reads `highlightedPaths` from the core controller for visual highlights, aligned with the core's `focusedNode` / `highlightedPaths` / `selectedPaths` model.
+- **Interaction example page**: Interactive demo at `/examples/interaction` for click behavior, multi-select, and keyboard navigation with live state display.
+
+### v1.0.0-rc02
+
 - **Multi-select**: Ctrl+click toggle, Shift+click range, Shift+drag rectangle selection. Visual (2D bounding-box) and logical (tree-order) range modes.
 - **4-level context menu**: Node, selection, group box, and canvas-level menus with icons, shortcuts, submenus, and dividers.
 - **Spatial keyboard navigation**: Full arrow-key nav based on node positions, with correct handling for balanced and fishbone layouts. `navigationOverrides` prop for custom overrides.
