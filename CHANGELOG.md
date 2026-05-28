@@ -15,6 +15,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **`{ noEmit: true }` on `expandAll` and `collapseAll`**: Skips the change emit so callers can batch operations and emit once via `controller.tree.refresh()`.
 - **`expandNodes(path, options?)` and `collapseNodes(path, options?)` exported on `CanvasTree`**: Parity with the HTML `Tree` component. Accept `string | string[]` and forward to the core. Saves users from reaching into `ctrlRef` for common operations.
 - **`isSelectedMember` and `isSelectableMember` props**: Passed through to the underlying `TreeProvider`. Seeds the bindable `selectedPaths` Set at insert time and controls whether a node is selectable. Requires `@keenmate/svelte-treeview` >= 5.0.0-rc07.
+- **`/examples/expand-collapse` demo page**: Three cards demonstrating array variants, exclusive focus mode, and `isSelectedMember` seeding on canvas trees with live readouts.
 
 ### Changed
 - **Internal: `selectNode` / `selectNodes` → `highlightNode` / `highlightNodes`**: Migrated the canvas interaction handlers and the dendrogram example to the rc06-renamed methods. The old names still work on the core (deprecated aliases) but the canvas no longer calls them. No user-visible API change.

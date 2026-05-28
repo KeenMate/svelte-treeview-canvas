@@ -12,6 +12,7 @@ This package was originally part of `@keenmate/svelte-treeview` but has been ext
 - **`{ noEmit: true }` option**: Skips the change emit on any of the four expand/collapse methods; batch multiple ops and emit once via `controller.tree.refresh()`.
 - **`isSelectedMember` / `isSelectableMember` props passthrough**: Forward to the core `TreeProvider` so canvas users can seed `selectedPaths` from data and gate selectability per node. Requires `@keenmate/svelte-treeview` >= 5.0.0-rc07.
 - **Internal: migrated to `highlightNode` / `highlightNodes`**: Canvas interaction code and the dendrogram example now use the rc06 names instead of the deprecated `selectNode` / `selectNodes` aliases. No user-visible API change.
+- **`/examples/expand-collapse` demo page**: Three cards — Array variants, Exclusive focus mode, and `isSelectedMember` seeding — each on a live canvas tree with current-expanded-paths readout.
 
 ## What's New in v1.0.0-rc03
 

@@ -1,7 +1,7 @@
 <script>
 	import { onMount } from 'svelte';
 
-	const version = 'v1.0.0-rc03';
+	const version = 'v1.0.0-rc04';
 
 	const examples = [
 		{
@@ -45,6 +45,12 @@
 			icon: '🌿',
 			title: 'Branch Operations',
 			description: 'Bulk subtree operations — insertBranch, replaceBranch, deleteBranch — with single emission on canvas.'
+		},
+		{
+			href: '/examples/expand-collapse',
+			icon: '🌳',
+			title: 'Expand / Collapse',
+			description: 'Array variants, { exclusive: true } focus mode, and isSelectedMember seeding from data.'
 		},
 		{
 			href: '/dev/layout-modes',
