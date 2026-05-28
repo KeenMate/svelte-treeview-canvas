@@ -371,7 +371,7 @@
 			icon: '\u{2705}',
 			label: `Select all ${childNodes.length} children`,
 			onclick: () => {
-				ctrlRef?.selectNodes(childNodes.map(n => n.path));
+				ctrlRef?.highlightNodes(childNodes.map(n => n.path));
 				selectedPaths = ctrlRef?.selectedPaths ?? new Set();
 			}
 		});

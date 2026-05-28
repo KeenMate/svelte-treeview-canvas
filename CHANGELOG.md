@@ -7,6 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.0.0-rc04] - 2026-05-28
+
+### Added
+- **Array variants on `expandAll` / `collapseAll`**: Both wrappers now accept `string | string[] | null` and forward to the core's array-aware methods (single emit per call). For the non-array case behavior is unchanged.
+- **`{ exclusive: true }` on `expandAll`**: Forwarded to core. Opens the target path(s) and collapses anything currently expanded that isn't on the union-of-spines or under a target subtree — single pass, single emit. Sunburst mode approximates this by collapsing everything first (with `noEmit`) and then running the overflow-aware sunburst expand pass.
+- **`{ noEmit: true }` on `expandAll` and `collapseAll`**: Skips the change emit so callers can batch operations and emit once via `controller.tree.refresh()`.
+- **`expandNodes(path, options?)` and `collapseNodes(path, options?)` exported on `CanvasTree`**: Parity with the HTML `Tree` component. Accept `string | string[]` and forward to the core. Saves users from reaching into `ctrlRef` for common operations.
+- **`isSelectedMember` and `isSelectableMember` props**: Passed through to the underlying `TreeProvider`. Seeds the bindable `selectedPaths` Set at insert time and controls whether a node is selectable. Requires `@keenmate/svelte-treeview` >= 5.0.0-rc07.
+
+### Changed
+- **Internal: `selectNode` / `selectNodes` → `highlightNode` / `highlightNodes`**: Migrated the canvas interaction handlers and the dendrogram example to the rc06-renamed methods. The old names still work on the core (deprecated aliases) but the canvas no longer calls them. No user-visible API change.
+- **Peer dependency**: `@keenmate/svelte-treeview` >= 5.0.0-rc08 recommended (required for array variants, `{ exclusive }`, `{ noEmit }`, and `isSelectedMember`).
+
 ## [1.0.0-rc03] - 2026-03-31
 
 ### Added

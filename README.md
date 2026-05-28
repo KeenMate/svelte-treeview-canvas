@@ -4,28 +4,20 @@ Canvas 2D rendering plugin for [`@keenmate/svelte-treeview`](https://github.com/
 
 This package was originally part of `@keenmate/svelte-treeview` but has been extracted into its own package to separate concerns — the core package handles tree data, expand/collapse, search, drag & drop logic, while this package provides a high-performance canvas renderer on top of the same core. **You still need `@keenmate/svelte-treeview` installed** — it is a required peer dependency.
 
+## What's New in v1.0.0-rc04
+
+- **Array variants on `expandAll` / `collapseAll`**: Pass `string[]` to expand or collapse multiple subtrees in one call (single emit).
+- **`expandNodes` / `collapseNodes` exported on `CanvasTree`**: Parity with HTML `Tree` — no need to reach into `ctrlRef` for common ops. Both accept `string | string[]`.
+- **`{ exclusive: true }` on `expandAll` / `expandNodes`**: Opens the target path(s) and collapses everything currently expanded that isn't on the spine — single pass, no intermediate fully-collapsed flicker.
+- **`{ noEmit: true }` option**: Skips the change emit on any of the four expand/collapse methods; batch multiple ops and emit once via `controller.tree.refresh()`.
+- **`isSelectedMember` / `isSelectableMember` props passthrough**: Forward to the core `TreeProvider` so canvas users can seed `selectedPaths` from data and gate selectability per node. Requires `@keenmate/svelte-treeview` >= 5.0.0-rc07.
+- **Internal: migrated to `highlightNode` / `highlightNodes`**: Canvas interaction code and the dendrogram example now use the rc06 names instead of the deprecated `selectNode` / `selectNodes` aliases. No user-visible API change.
+
 ## What's New in v1.0.0-rc03
 
 - **Shift+keyboard highlight**: Shift+Arrow/Home/End/PageUp/PageDown extends highlight selection on canvas, matching file-manager behavior.
 - **Three-level selection alignment**: Canvas now reads `highlightedPaths` from the core controller for visual highlights, aligned with the core's `focusedNode` / `highlightedPaths` / `selectedPaths` model.
 - **Interaction example page**: Interactive demo at `/examples/interaction` for click behavior, multi-select, and keyboard navigation with live state display.
-
-### v1.0.0-rc02
-
-- **Multi-select**: Ctrl+click toggle, Shift+click range, Shift+drag rectangle selection. Visual (2D bounding-box) and logical (tree-order) range modes.
-- **4-level context menu**: Node, selection, group box, and canvas-level menus with icons, shortcuts, submenus, and dividers.
-- **Spatial keyboard navigation**: Full arrow-key nav based on node positions, with correct handling for balanced and fishbone layouts. `navigationOverrides` prop for custom overrides.
-- **`autoFocusOnSelect`**: Auto-pans canvas viewport to the selected node and scrolls the page to the canvas if needed.
-- **Canvas clipboard**: `enableClipboard` prop for Ctrl+C/X/V support. Cut nodes rendered at 40% opacity.
-- **Callback rename**: `onNodeContextMenu` → `getNodeContextMenuItemsCallback` (and similar) for clearer event vs data-provider distinction.
-
-### v1.0.0-rc02
-
-- **`onCanvasContextMenu` prop**: Right-click empty canvas space (no node) for a canvas-level context menu. Returns `ContextMenuEntry[]`, renders the same styled menu without a node header.
-- **Unified Context Menu API**: Shares `ContextMenuEntry` / `ContextMenuDivider` / `ContextMenuItem` types from `@keenmate/svelte-treeview`. Full support for icons, keyboard shortcuts, nested submenus, named dividers, `isVisible`, `isDisabled`, `className="danger"`, and async `onclick`.
-- **Context menu keyboard shortcuts**: When either menu is open, pressing a shortcut key (e.g. `V`, `Ctrl+C`) triggers the matching item. Escape closes the menu.
-- **Submenu alignment fix**: Submenus now align with their parent item instead of the menu top edge.
-- **Context Menu example page**: Interactive demo at `/examples/context-menu` with 7 presets showcasing all menu features, plus canvas-level menu demo.
 
 ## Installation
 

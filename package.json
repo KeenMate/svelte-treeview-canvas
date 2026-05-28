@@ -1,6 +1,6 @@
 {
 	"name": "@keenmate/svelte-treeview-canvas",
-	"version": "1.0.0-rc03",
+	"version": "1.0.0-rc04",
 	"scripts": {
 		"dev": "vite dev --port 17778",
 		"build": "vite build && npm run prepack",

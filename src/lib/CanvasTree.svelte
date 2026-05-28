@@ -77,6 +77,8 @@
 		getAllowedDropPositionsCallback?: (node: LTreeNode<T>) => DropPosition[] | null;
 		isCollapsibleMember?: string;
 		getIsCollapsibleCallback?: (node: LTreeNode<T>) => boolean;
+		isSelectableMember?: string;
+		isSelectedMember?: string;
 		orderMember?: string;
 
 		// Canvas Visual Config
@@ -197,6 +199,8 @@
 		getAllowedDropPositionsCallback,
 		isCollapsibleMember,
 		getIsCollapsibleCallback,
+		isSelectableMember,
+		isSelectedMember,
 		orderMember,
 
 		// Visual config
@@ -810,7 +814,7 @@
 				const inSelection = ctrlRef ? ctrlRef.highlightedPaths.has(ln.node.path) : selectedPaths.has(ln.node.path);
 				console.debug(`[CanvasTree] onContextMenu: ${ln.node.path}, inSelection=${inSelection}`);
 				// If right-clicking on an unselected node, clear multi-selection and select it
-				// Use direct state manipulation — NOT selectNode() which closes the context menu
+				// Use direct state manipulation — NOT highlightNode() which closes the context menu
 				if (!inSelection) {
 					console.debug(`[CanvasTree] onContextMenu: clearing selection, selecting only ${ln.node.path}`);
 					if (ctrlRef) {
@@ -882,7 +886,7 @@
 				if (ctrlRef) {
 					// Route all selection through TreeController so lastHighlightedPath stays in sync
 					if (ctrl) {
-						ctrlRef.selectNode(path, 'toggle');
+						ctrlRef.highlightNode(path, 'toggle');
 					} else if (shift) {
 						if (rangeSelectionMode === 'visual' && ctrlRef.lastHighlightedPath) {
 							// 2D bounding-box selection using canvas layout positions
@@ -909,19 +913,19 @@
 									}
 								}
 								console.debug(`[multi-select] Visual 2D range: anchor=${anchorPath}, target=${path}, rect=[${minX.toFixed(0)},${minY.toFixed(0)} → ${maxX.toFixed(0)},${maxY.toFixed(0)}], hit ${hitPaths.length} nodes`);
-								ctrlRef.selectNodes(hitPaths);
+								ctrlRef.highlightNodes(hitPaths);
 								// Preserve anchor for subsequent shift+clicks
 								ctrlRef.lastHighlightedPath = anchorPath;
 							} else {
 								// Fallback: use controller's 1D range
-								ctrlRef.selectNode(path, 'range');
+								ctrlRef.highlightNode(path, 'range');
 							}
 						} else {
 							// Logical mode or no anchor: use controller's tree-order range
-							ctrlRef.selectNode(path, 'range');
+							ctrlRef.highlightNode(path, 'range');
 						}
 					} else {
-						ctrlRef.selectNode(path, 'replace');
+						ctrlRef.highlightNode(path, 'replace');
 					}
 					selectedPaths = ctrlRef.highlightedPaths;
 				} else {
@@ -1978,16 +1982,42 @@
 		interaction.scrollToPath(path);
 	}
 
-	export function expandAll(nodePath?: string | null) {
+	export function expandNodes(
+		path: string | string[],
+		options?: { exclusive?: boolean; noEmit?: boolean }
+	) {
+		if (!ctrlRef) return;
+		ctrlRef.expandNodes(path, options);
+		recomputeAndDraw();
+	}
+
+	export function collapseNodes(
+		path: string | string[],
+		options?: { noEmit?: boolean }
+	) {
+		if (!ctrlRef) return;
+		ctrlRef.collapseNodes(path, options);
+		recomputeAndDraw();
+	}
+
+	export function expandAll(
+		nodePath?: string | string[] | null,
+		options?: { exclusive?: boolean; noEmit?: boolean }
+	) {
 		if (!ctrlRef) return;
 		if (layoutMode === 'sunburst') {
-			sunburstExpandAll(ctrlRef, nodePath ?? null);
+			// Sunburst has its own overflow-aware expand pass. `exclusive` is
+			// approximated by collapsing first; arrays iterate per-path.
+			if (options?.exclusive) ctrlRef.collapseAll(undefined, { noEmit: true });
+			const paths = Array.isArray(nodePath) ? nodePath : [nodePath ?? null];
+			for (const p of paths) sunburstExpandAll(ctrlRef, p ?? null);
 		} else {
-			ctrlRef.expandAll(nodePath);
+			ctrlRef.expandAll(nodePath, options);
 		}
 		recomputeAndDraw();
-		// Focus on the target node (or first root) and zoom out to show the expanded tree
-		const focusPath = nodePath ?? ctrlRef.tree.tree[0]?.path;
+		// Focus on the first target node (or first root) and zoom out to show the expanded tree
+		const firstTarget = Array.isArray(nodePath) ? nodePath[0] : nodePath;
+		const focusPath = firstTarget ?? ctrlRef.tree.tree[0]?.path;
 		if (focusPath) {
 			interaction.focusOnPath(focusPath, { zoom: 0.5, select: false });
 		}
@@ -2089,12 +2119,16 @@
 		}
 	}
 
-	export function collapseAll(nodePath?: string | null) {
+	export function collapseAll(
+		nodePath?: string | string[] | null,
+		options?: { noEmit?: boolean }
+	) {
 		if (!ctrlRef) return;
-		ctrlRef.collapseAll(nodePath);
+		ctrlRef.collapseAll(nodePath, options);
 		recomputeAndDraw();
-		// Focus on the target node (or first root) to center the collapsed tree
-		const focusPath = nodePath ?? ctrlRef.tree.tree[0]?.path;
+		// Focus on the first target node (or first root) to center the collapsed tree
+		const firstTarget = Array.isArray(nodePath) ? nodePath[0] : nodePath;
+		const focusPath = firstTarget ?? ctrlRef.tree.tree[0]?.path;
 		if (focusPath) {
 			interaction.focusOnPath(focusPath, { zoom: 'auto', select: false });
 		}
@@ -2235,6 +2269,8 @@
 	getAllowedDropPositionsCallback={getAllowedDropPositionsCallback}
 	isCollapsibleMember={isCollapsibleMember}
 	getIsCollapsibleCallback={getIsCollapsibleCallback}
+	isSelectableMember={isSelectableMember}
+	isSelectedMember={isSelectedMember}
 	orderMember={orderMember}
 	getContextMenuItemsCallback={getNodeContextMenuItemsHandler ? (node, _close, selectedNodes) => getNodeContextMenuItemsHandler(node, selectedNodes) : undefined}
 	contextMenuXOffset={8}
