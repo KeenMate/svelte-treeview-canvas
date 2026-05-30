@@ -1987,6 +1987,7 @@
 		options?: { exclusive?: boolean; noEmit?: boolean }
 	) {
 		if (!ctrlRef) return;
+		console.debug('[CanvasTree.expandNodes]', { path, options });
 		ctrlRef.expandNodes(path, options);
 		recomputeAndDraw();
 	}
@@ -1996,6 +1997,7 @@
 		options?: { noEmit?: boolean }
 	) {
 		if (!ctrlRef) return;
+		console.debug('[CanvasTree.collapseNodes]', { path, options });
 		ctrlRef.collapseNodes(path, options);
 		recomputeAndDraw();
 	}
@@ -2005,6 +2007,7 @@
 		options?: { exclusive?: boolean; noEmit?: boolean }
 	) {
 		if (!ctrlRef) return;
+		console.debug('[CanvasTree.expandAll]', { nodePath, options, layoutMode });
 		if (layoutMode === 'sunburst') {
 			// Sunburst has its own overflow-aware expand pass. `exclusive` is
 			// approximated by collapsing first; arrays iterate per-path.
@@ -2015,11 +2018,11 @@
 			ctrlRef.expandAll(nodePath, options);
 		}
 		recomputeAndDraw();
-		// Focus on the first target node (or first root) and zoom out to show the expanded tree
-		const firstTarget = Array.isArray(nodePath) ? nodePath[0] : nodePath;
-		const focusPath = firstTarget ?? ctrlRef.tree.tree[0]?.path;
-		if (focusPath) {
-			interaction.focusOnPath(focusPath, { zoom: 0.5, select: false });
+		// Camera: single target -> focus on it; array or whole-tree -> fit-to-view.
+		if (typeof nodePath === 'string' && nodePath) {
+			interaction.focusOnPath(nodePath, { zoom: 0.5, select: false });
+		} else {
+			interaction.zoomToFit();
 		}
 	}
 
@@ -2124,13 +2127,14 @@
 		options?: { noEmit?: boolean }
 	) {
 		if (!ctrlRef) return;
+		console.debug('[CanvasTree.collapseAll]', { nodePath, options });
 		ctrlRef.collapseAll(nodePath, options);
 		recomputeAndDraw();
-		// Focus on the first target node (or first root) to center the collapsed tree
-		const firstTarget = Array.isArray(nodePath) ? nodePath[0] : nodePath;
-		const focusPath = firstTarget ?? ctrlRef.tree.tree[0]?.path;
-		if (focusPath) {
-			interaction.focusOnPath(focusPath, { zoom: 'auto', select: false });
+		// Camera: single target -> focus on it; array or whole-tree -> fit-to-view.
+		if (typeof nodePath === 'string' && nodePath) {
+			interaction.focusOnPath(nodePath, { zoom: 'auto', select: false });
+		} else {
+			interaction.zoomToFit();
 		}
 	}
 
