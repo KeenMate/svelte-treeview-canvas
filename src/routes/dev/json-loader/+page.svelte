@@ -1976,8 +1976,8 @@
 							{sortCallback}
 							{isSorted}
 							{expandLevel}
-							{useFlatRendering}
-							{progressiveRender}
+							isFlatRenderingEnabled={useFlatRendering}
+							isProgressiveRender={progressiveRender}
 							{initialBatchSize}
 							{maxBatchSize}
 							shouldUseInternalSearchIndex={true}

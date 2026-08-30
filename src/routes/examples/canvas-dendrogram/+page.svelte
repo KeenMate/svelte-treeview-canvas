@@ -2,7 +2,7 @@
 	import { CanvasTree } from '$lib/index.js';
 	import { TreeController } from '@keenmate/svelte-treeview';
 	import type { LTreeNode } from '@keenmate/svelte-treeview';
-	import type { ContextMenuEntry, DropPosition } from '@keenmate/svelte-treeview';
+	import type { ContextMenuEntry, DropPosition, NodeTransformContext } from '@keenmate/svelte-treeview';
 	import type { GrowthDirection, ClickBehavior, CanvasLevelConfig, InitialViewport } from '$lib/types.js';
 
 	// ── Types ──────────────────────────────────────────────────────────────
@@ -158,11 +158,11 @@
 	// Clipboard
 	let enableClipboard = $state(true);
 	let nextPasteId = $state(10000);
-	function transformDataForPaste(data: TreeItem, index: number, operation: 'copy' | 'cut'): TreeItem {
+	function transformDataForPaste(data: TreeItem, ctx: NodeTransformContext<TreeItem>): TreeItem | null {
 		return {
 			...data,
 			id: nextPasteId++,
-			name: operation === 'copy' ? `${data.name} (copy)` : data.name
+			name: ctx.operation === 'copy' ? `${data.name} (copy)` : data.name
 		};
 	}
 	function onPaste(result: { success: boolean; count: number; error?: string }) {
@@ -268,7 +268,7 @@
 				icon: '\u{274C}',
 				label: 'Clear selection',
 				onclick: () => {
-					ctrlRef?.deselectAll();
+					ctrlRef?.clearSelection();
 					selectedPaths = new Set();
 				}
 			});
@@ -473,7 +473,7 @@
 				icon: '\u{274C}',
 				label: 'Clear selection',
 				onclick: () => {
-					ctrlRef?.deselectAll();
+					ctrlRef?.clearSelection();
 					selectedPaths = new Set();
 				}
 			});
@@ -881,7 +881,7 @@
 				<div class="info-panel">
 					<h3>Multi-Selection</h3>
 					<p><strong>{selectedPaths.size} nodes selected</strong> <span class="info-meta">({rangeSelectionMode} mode)</span></p>
-					<button class="btn secondary" style="margin-top: 0.4rem; font-size: 0.8rem; padding: 0.25rem 0.6rem;" onclick={() => { ctrlRef?.deselectAll(); selectedPaths = new Set(); }}>Clear Selection</button>
+					<button class="btn secondary" style="margin-top: 0.4rem; font-size: 0.8rem; padding: 0.25rem 0.6rem;" onclick={() => { ctrlRef?.clearSelection(); selectedPaths = new Set(); }}>Clear Selection</button>
 				</div>
 			{:else if selectedPath && ctrlRef}
 				{@const selNode = ctrlRef.getNodeByPath(selectedPath)}

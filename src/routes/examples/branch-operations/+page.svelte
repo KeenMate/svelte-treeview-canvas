@@ -110,11 +110,11 @@
 		activityLog = [];
 	}
 
-	// Set autoHandlePaste=false on the controller once it's available
+	// Set shouldAutoHandlePaste=false on the controller once it's available
 	// so paste goes through our async server flow instead of instant tree mutation
 	$effect(() => {
 		if (ctrlRef) {
-			ctrlRef.autoHandlePaste = false;
+			ctrlRef.shouldAutoHandlePaste = false;
 		}
 	});
 
@@ -174,7 +174,7 @@
 		});
 	}
 
-	// ── Paste handler (called by built-in clipboard when autoHandlePaste=false) ──
+	// ── Paste handler (called by built-in clipboard when shouldAutoHandlePaste=false) ──
 
 	async function handlePaste(pasteResult: PasteResult<OrgNode>) {
 		if (!pasteResult.entries || !ctrlRef) return;
@@ -235,7 +235,7 @@
 	}
 
 	// Required by enableClipboard — transforms data for the clipboard snapshot
-	function transformDataForPaste(data: OrgNode, index: number, operation: 'copy' | 'cut'): OrgNode {
+	function transformDataForPaste(data: OrgNode): OrgNode | null {
 		return { ...data, id: nextId++ };
 	}
 
@@ -288,7 +288,7 @@
 				isDisabled: isProcessing,
 				onclick: () => {
 					if (!ctrlRef) return;
-					// pasteNodes with autoHandlePaste=false forwards to onPaste handler
+					// pasteNodes with shouldAutoHandlePaste=false forwards to onPaste handler
 					ctrlRef.pasteNodes(node.path, transformDataForPaste, 'child');
 				}
 			});
@@ -556,8 +556,8 @@
 			</p>
 
 			<div class="code-block">
-				<pre><code>{`// autoHandlePaste = false → paste goes to onPaste
-ctrl.autoHandlePaste = false;
+				<pre><code>{`// shouldAutoHandlePaste = false → paste goes to onPaste
+ctrl.shouldAutoHandlePaste = false;
 
 // onPaste handler receives clipboard data
 async function handlePaste(result) {

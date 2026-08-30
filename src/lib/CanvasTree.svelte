@@ -1,7 +1,7 @@
 <script lang="ts" generics="T">
 	import { type Snippet, onDestroy } from 'svelte';
 	import { TreeProvider, TreeController, type TreeControllerProps } from '@keenmate/svelte-treeview';
-	import type { LTreeNode, DropPosition, ContextMenuEntry, TreeNavigation, TreeNavigationOverrides } from '@keenmate/svelte-treeview';
+	import type { LTreeNode, DropPosition, ContextMenuEntry, TreeNavigation, TreeNavigationOverrides, NodeTransformContext, PasteResult } from '@keenmate/svelte-treeview';
 	import type {
 		Orientation,
 		GrowthDirection,
@@ -168,8 +168,8 @@
 
 		// Clipboard support
 		enableClipboard?: boolean;
-		transformDataForPaste?: (data: T, index: number, operation: 'copy' | 'cut') => T;
-		onPaste?: (result: { success: boolean; count: number; error?: string }) => void;
+		transformDataForPaste?: (data: T, ctx: NodeTransformContext<T>) => T | null;
+		onPaste?: (result: PasteResult<T>) => void;
 	}
 
 	let {
@@ -823,7 +823,7 @@
 						ln.node.isSelected = true;
 						ctrlRef.selectedPaths = new Set([ln.node.path]);
 						ctrlRef.focusedNode = ln.node;
-						ctrlRef.lastHighlightedPath = ln.node.path;
+						ctrlRef.highlightAnchor = ln.node.path;
 					}
 					selectedPaths = new Set([ln.node.path]);
 					selectedPath = ln.node.path;
@@ -884,13 +884,13 @@
 				const shift = modifiers?.shift ?? false;
 
 				if (ctrlRef) {
-					// Route all selection through TreeController so lastHighlightedPath stays in sync
+					// Route all selection through TreeController so highlightAnchor stays in sync
 					if (ctrl) {
 						ctrlRef.highlightNode(path, 'toggle');
 					} else if (shift) {
-						if (rangeSelectionMode === 'visual' && ctrlRef.lastHighlightedPath) {
+						if (rangeSelectionMode === 'visual' && ctrlRef.highlightAnchor) {
 							// 2D bounding-box selection using canvas layout positions
-							const anchorPath = ctrlRef.lastHighlightedPath;
+							const anchorPath = ctrlRef.highlightAnchor;
 							let anchorLn: LayoutNode<T> | null = null;
 							let targetLn: LayoutNode<T> | null = null;
 							for (const ln of layoutNodes) {
@@ -915,7 +915,7 @@
 								console.debug(`[multi-select] Visual 2D range: anchor=${anchorPath}, target=${path}, rect=[${minX.toFixed(0)},${minY.toFixed(0)} → ${maxX.toFixed(0)},${maxY.toFixed(0)}], hit ${hitPaths.length} nodes`);
 								ctrlRef.highlightNodes(hitPaths);
 								// Preserve anchor for subsequent shift+clicks
-								ctrlRef.lastHighlightedPath = anchorPath;
+								ctrlRef.highlightAnchor = anchorPath;
 							} else {
 								// Fallback: use controller's 1D range
 								ctrlRef.highlightNode(path, 'range');
@@ -2237,6 +2237,31 @@
 
 	export function getLayoutNodes(): LayoutNode<T>[] {
 		return layoutNodes;
+	}
+
+	/**
+	 * Live client-space (viewport) bounding rect of a rendered node, or null when the
+	 * path isn't in the current layout. Converts the node's WORLD rect through the
+	 * current pan/zoom (worldToScreen: world * zoom + pan, mirroring the interaction
+	 * manager's screenToWorld) and offsets by the canvas element's client position.
+	 *
+	 * Purpose-built for overlays and e2e: `page.mouse.click(r.centerX, r.centerY)`
+	 * targets the node no matter where the viewport currently sits, so tests don't
+	 * depend on a fixed initial pan/zoom. Call after any focus/zoom animation settles.
+	 */
+	export function getNodeScreenRect(
+		path: string
+	): { x: number; y: number; width: number; height: number; centerX: number; centerY: number } | null {
+		if (!canvasEl) return null;
+		const ln = layoutNodes.find((n) => !n.isVirtual && n.node.path === path);
+		if (!ln) return null;
+		const { panX, panY, zoom } = interaction.getState();
+		const rect = canvasEl.getBoundingClientRect();
+		const width = ln.w * zoom;
+		const height = ln.h * zoom;
+		const x = rect.left + ln.x * zoom + panX;
+		const y = rect.top + ln.y * zoom + panY;
+		return { x, y, width, height, centerX: x + width / 2, centerY: y + height / 2 };
 	}
 
 	export function refreshTheme() {
